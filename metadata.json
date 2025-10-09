@@ -1,0 +1,5 @@
+{
+  "name": "CSM Task Hub",
+  "description": "A task management application for Customer Success Teams. Managers can create and assign tasks to CSMs, who manage them on a per-customer basis within a dedicated agenda view.",
+  "requestFramePermissions": []
+}
