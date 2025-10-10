@@ -35,7 +35,7 @@ export interface Task {
   description: string;
   dueDate: string;
   category: TaskCategory;
-  csmInputType: CSMInputType;
+  csmInputTypes: CSMInputType[];
   multiSelectOptions?: MultiSelectOption[];
   assignedCustomerIds: string[];
   fileAttachment?: { name: string; url: string };
