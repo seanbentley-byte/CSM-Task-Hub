@@ -161,14 +161,46 @@ const TaskFormModal: React.FC<{ isOpen: boolean; onClose: () => void; editingTas
 
 const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
     const { customers, csms, taskCompletions } = useAppContext();
-    
-    const assignedCustomers = customers.filter(c => task.assignedCustomerIds.includes(c.id));
+    const [selectedOptionFilter, setSelectedOptionFilter] = useState<string>('all');
+
+    const hasMultiSelect = task.csmInputTypes.includes(CSMInputType.MultiSelect);
+
+    const filteredCustomers = useMemo(() => {
+        const assignedCustomers = customers.filter(c => task.assignedCustomerIds.includes(c.id));
+        if (!hasMultiSelect || selectedOptionFilter === 'all') {
+            return assignedCustomers;
+        }
+        return assignedCustomers.filter(customer => {
+            const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
+            return completion?.selectedOptions?.includes(selectedOptionFilter);
+        });
+    }, [customers, task.assignedCustomerIds, hasMultiSelect, selectedOptionFilter, taskCompletions, task.id]);
+
 
     return (
         <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-            <h4 className="font-semibold text-slate-700 mb-2">Completion Details</h4>
+            <div className="flex justify-between items-center mb-2">
+                <h4 className="font-semibold text-slate-700">Completion Details</h4>
+                {hasMultiSelect && (
+                     <div>
+                        <label htmlFor={`filter-${task.id}`} className="text-sm font-medium text-slate-600 mr-2">Filter by response:</label>
+                         <select
+                             id={`filter-${task.id}`}
+                             value={selectedOptionFilter}
+                             onChange={e => setSelectedOptionFilter(e.target.value)}
+                             className="border-slate-300 rounded-md text-sm py-1 pl-2 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                         >
+                             <option value="all">All Responses</option>
+                             {task.multiSelectOptions?.map(opt => (
+                                 <option key={opt.id} value={opt.id}>{opt.label}</option>
+                             ))}
+                         </select>
+                     </div>
+                 )}
+            </div>
+            
             <ul className="space-y-3">
-                {assignedCustomers.map(customer => {
+                {filteredCustomers.map(customer => {
                     const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
                     const csm = csms.find(c => c.id === customer.assignedCsmId);
                     
@@ -183,7 +215,7 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
                                         <div className="text-sm mt-1 text-slate-600 italic space-y-1">
                                             {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: "{completion.notes}"</p>}
                                             {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
-                                                <p>Response: {completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</p>
+                                                <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
                                             }
                                         </div>
                                     )}
@@ -193,6 +225,7 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
                         </li>
                     );
                 })}
+                 {filteredCustomers.length === 0 && <p className="text-center text-slate-500 py-4">No customers match this filter.</p>}
             </ul>
         </div>
     );
