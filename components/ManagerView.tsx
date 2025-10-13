@@ -162,41 +162,76 @@ const TaskFormModal: React.FC<{ isOpen: boolean; onClose: () => void; editingTas
 const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
     const { customers, csms, taskCompletions } = useAppContext();
     const [selectedOptionFilter, setSelectedOptionFilter] = useState<string>('all');
+    const [completionStatusFilter, setCompletionStatusFilter] = useState<'all' | 'completed' | 'incomplete'>('all');
 
     const hasMultiSelect = task.csmInputTypes.includes(CSMInputType.MultiSelect);
 
     const filteredCustomers = useMemo(() => {
-        const assignedCustomers = customers.filter(c => task.assignedCustomerIds.includes(c.id));
-        if (!hasMultiSelect || selectedOptionFilter === 'all') {
-            return assignedCustomers;
+        let assignedCustomers = customers.filter(c => task.assignedCustomerIds.includes(c.id));
+        
+        // Filter by multi-select response
+        if (hasMultiSelect && selectedOptionFilter !== 'all') {
+            assignedCustomers = assignedCustomers.filter(customer => {
+                const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
+                return completion?.selectedOptions?.includes(selectedOptionFilter);
+            });
         }
-        return assignedCustomers.filter(customer => {
-            const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
-            return completion?.selectedOptions?.includes(selectedOptionFilter);
-        });
-    }, [customers, task.assignedCustomerIds, hasMultiSelect, selectedOptionFilter, taskCompletions, task.id]);
+    
+        // Filter by completion status
+        if (completionStatusFilter !== 'all') {
+            assignedCustomers = assignedCustomers.filter(customer => {
+                const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
+                const isCompleted = completion?.isCompleted || false;
+                
+                if (completionStatusFilter === 'completed') {
+                    return isCompleted;
+                }
+                if (completionStatusFilter === 'incomplete') {
+                    return !isCompleted;
+                }
+                return true;
+            });
+        }
+        
+        return assignedCustomers;
+    }, [customers, task.assignedCustomerIds, hasMultiSelect, selectedOptionFilter, completionStatusFilter, taskCompletions, task.id]);
 
 
     return (
         <div className="mt-4 p-4 bg-slate-50 rounded-lg">
             <div className="flex justify-between items-center mb-2">
                 <h4 className="font-semibold text-slate-700">Completion Details</h4>
-                {hasMultiSelect && (
+                <div className="flex gap-4 items-center">
+                    {hasMultiSelect && (
+                         <div>
+                            <label htmlFor={`filter-response-${task.id}`} className="text-sm font-medium text-slate-600 mr-2">Filter by response:</label>
+                             <select
+                                 id={`filter-response-${task.id}`}
+                                 value={selectedOptionFilter}
+                                 onChange={e => setSelectedOptionFilter(e.target.value)}
+                                 className="border-slate-300 rounded-md text-sm py-1 pl-2 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                             >
+                                 <option value="all">All Responses</option>
+                                 {task.multiSelectOptions?.map(opt => (
+                                     <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                 ))}
+                             </select>
+                         </div>
+                     )}
                      <div>
-                        <label htmlFor={`filter-${task.id}`} className="text-sm font-medium text-slate-600 mr-2">Filter by response:</label>
-                         <select
-                             id={`filter-${task.id}`}
-                             value={selectedOptionFilter}
-                             onChange={e => setSelectedOptionFilter(e.target.value)}
-                             className="border-slate-300 rounded-md text-sm py-1 pl-2 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                         >
-                             <option value="all">All Responses</option>
-                             {task.multiSelectOptions?.map(opt => (
-                                 <option key={opt.id} value={opt.id}>{opt.label}</option>
-                             ))}
-                         </select>
-                     </div>
-                 )}
+                        <label htmlFor={`filter-status-${task.id}`} className="text-sm font-medium text-slate-600 mr-2">Filter by status:</label>
+                        <select
+                            id={`filter-status-${task.id}`}
+                            value={completionStatusFilter}
+                            onChange={e => setCompletionStatusFilter(e.target.value as 'all' | 'completed' | 'incomplete')}
+                            className="border-slate-300 rounded-md text-sm py-1 pl-2 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                            <option value="all">All Customers</option>
+                            <option value="completed">Completed</option>
+                            <option value="incomplete">Incomplete</option>
+                        </select>
+                    </div>
+                </div>
             </div>
             
             <ul className="space-y-3">
@@ -225,7 +260,7 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
                         </li>
                     );
                 })}
-                 {filteredCustomers.length === 0 && <p className="text-center text-slate-500 py-4">No customers match this filter.</p>}
+                 {filteredCustomers.length === 0 && <p className="text-center text-slate-500 py-4">No customers match the current filters.</p>}
             </ul>
         </div>
     );
@@ -239,21 +274,29 @@ const ManagerView: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<TaskCategory | 'all'>('all');
     const [showArchived, setShowArchived] = useState(false);
+    const [completionFilter, setCompletionFilter] = useState<'all' | 'completed' | 'incomplete'>('all');
 
-
-    const filteredTasks = useMemo(() => {
-        return tasks
-            .filter(task => task.isArchived === showArchived)
-            .filter(task => categoryFilter === 'all' || task.category === categoryFilter)
-            .filter(task => task.title.toLowerCase().includes(searchQuery.toLowerCase()))
-            .sort((a,b) => b.createdAt - a.createdAt);
-    }, [tasks, showArchived, categoryFilter, searchQuery]);
 
     const getTaskCompletionPercent = (task: Task) => {
         if(task.assignedCustomerIds.length === 0) return 0;
         const completedCount = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted).length;
         return (completedCount / task.assignedCustomerIds.length) * 100;
     };
+
+    const filteredTasks = useMemo(() => {
+        return tasks
+            .filter(task => task.isArchived === showArchived)
+            .filter(task => categoryFilter === 'all' || task.category === categoryFilter)
+            .filter(task => {
+                if (completionFilter === 'all') return true;
+                const percent = getTaskCompletionPercent(task);
+                if (completionFilter === 'completed') return percent === 100;
+                if (completionFilter === 'incomplete') return percent < 100;
+                return true;
+            })
+            .filter(task => task.title.toLowerCase().includes(searchQuery.toLowerCase()))
+            .sort((a,b) => b.createdAt - a.createdAt);
+    }, [tasks, showArchived, categoryFilter, searchQuery, completionFilter, taskCompletions]);
     
     const handleArchiveTask = (taskId: string) => {
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, isArchived: !t.isArchived } : t));
@@ -299,6 +342,11 @@ const ManagerView: React.FC = () => {
                     <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as TaskCategory | 'all')} className="border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="all">All Categories</option>
                         {Object.values(TaskCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                     <select value={completionFilter} onChange={e => setCompletionFilter(e.target.value as 'all' | 'completed' | 'incomplete')} className="border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="all">All Statuses</option>
+                        <option value="incomplete">Incomplete</option>
+                        <option value="completed">Completed</option>
                     </select>
                      <div className="flex items-center">
                         <input id="show-archived" type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />

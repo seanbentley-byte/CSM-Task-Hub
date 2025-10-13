@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Task, Customer, CSMInputType, TaskCompletion, ActionItem } from '../types';
 import { useAppContext } from './AppContext';
-import { Card, Button, Tag, ClipboardListIcon, PlusIcon } from './ui';
+import { Card, Button, Tag, ClipboardListIcon, PlusIcon, ChevronDownIcon } from './ui';
 
 const ManagerTaskItem: React.FC<{ task: Task; customerId: string }> = ({ task, customerId }) => {
     const { taskCompletions, setTaskCompletions } = useAppContext();
@@ -261,6 +261,7 @@ const CustomerAgendaView: React.FC<{ customer: Customer }> = ({ customer }) => {
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const { customers, tasks, taskCompletions } = useAppContext();
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+    const [isCustomerListCollapsed, setIsCustomerListCollapsed] = useState(false);
 
     const myCustomers = useMemo(() => customers.filter(c => c.assignedCsmId === csmId).sort((a, b) => a.name.localeCompare(b.name)), [customers, csmId]);
 
@@ -281,22 +282,33 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     return (
         <div className="flex gap-6 items-start">
             <Card className="w-1/3">
-                <h2 className="text-xl font-semibold text-slate-700 mb-4">My Customers</h2>
-                <ul className="space-y-2">
-                    {myCustomers.map(customer => {
-                        const openTasks = getOpenTaskCount(customer.id);
-                        return (
-                             <li key={customer.id}>
-                                <button onClick={() => setSelectedCustomerId(customer.id)} className={`w-full text-left p-3 rounded-md transition-colors ${selectedCustomerId === customer.id ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-slate-100'}`}>
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-semibold">{customer.name}</span>
-                                        {openTasks > 0 && <Tag color="bg-red-100 text-red-800">{openTasks} open</Tag>}
-                                    </div>
-                                </button>
-                            </li>
-                        )
-                    })}
-                </ul>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold text-slate-700">My Customers</h2>
+                     <button
+                        onClick={() => setIsCustomerListCollapsed(!isCustomerListCollapsed)}
+                        className="p-1 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+                        aria-label={isCustomerListCollapsed ? 'Expand customer list' : 'Collapse customer list'}
+                    >
+                        <ChevronDownIcon className={`transition-transform ${isCustomerListCollapsed ? '' : 'rotate-180'}`} />
+                    </button>
+                </div>
+                {!isCustomerListCollapsed && (
+                    <ul className="space-y-2">
+                        {myCustomers.map(customer => {
+                            const openTasks = getOpenTaskCount(customer.id);
+                            return (
+                                <li key={customer.id}>
+                                    <button onClick={() => setSelectedCustomerId(customer.id)} className={`w-full text-left p-3 rounded-md transition-colors ${selectedCustomerId === customer.id ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-slate-100'}`}>
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-semibold">{customer.name}</span>
+                                            {openTasks > 0 && <Tag color="bg-red-100 text-red-800">{openTasks} open</Tag>}
+                                        </div>
+                                    </button>
+                                </li>
+                            )
+                        })}
+                    </ul>
+                )}
             </Card>
 
             <div className="w-2/3">
