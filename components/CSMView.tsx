@@ -1,409 +1,451 @@
-import React, { useState, useMemo } from 'react';
-import { Task, Customer, CSMInputType, TaskCompletion, ActionItem } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { Card, Button, Tag, ClipboardListIcon, PlusIcon, ChevronDownIcon, TrashIcon, MarkdownRenderer, SparklesIcon, SearchIcon } from './ui';
+// FIX: Added ChevronDownIcon to the import list.
+import { Card, Button, CheckCircleIcon, MarkdownRenderer, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon } from './ui';
+import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
 
-const ManagerTaskItem: React.FC<{ task: Task; customerId: string }> = ({ task, customerId }) => {
-    const { taskCompletions, setTaskCompletions } = useAppContext();
+const TaskCompletionForm: React.FC<{
+    task: Task;
+    customerId: string;
+    existingCompletion?: TaskCompletion;
+    onSave: (completion: Omit<TaskCompletion, 'completedAt' | 'taskId' | 'customerId'>) => void;
+    onCancel: () => void;
+}> = ({ task, customerId, existingCompletion, onSave, onCancel }) => {
+    const [isCompleted, setIsCompleted] = useState(existingCompletion?.isCompleted || false);
+    const [notes, setNotes] = useState(existingCompletion?.notes || '');
+    const [selectedOptions, setSelectedOptions] = useState<string[]>(existingCompletion?.selectedOptions || []);
+    
+    const hasCheckbox = task.csmInputTypes.includes(CSMInputType.Checkbox);
+    const hasTextArea = task.csmInputTypes.includes(CSMInputType.TextArea);
+    const hasMultiSelect = task.csmInputTypes.includes(CSMInputType.MultiSelect);
 
-    const completion = useMemo(() => 
-        taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customerId) || { taskId: task.id, customerId, isCompleted: false }, 
-        [taskCompletions, task.id, customerId]
-    );
+    const handleSave = () => {
+        const completionData: Omit<TaskCompletion, 'completedAt' | 'taskId' | 'customerId'> = {
+            isCompleted: hasCheckbox ? isCompleted : (notes.trim() !== '' || selectedOptions.length > 0),
+            notes,
+            selectedOptions,
+        };
+        onSave(completionData);
+    };
+    
+    const handleMultiSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        // This is now a single-select dropdown as per user request
+        const value = e.target.value;
+        setSelectedOptions(value ? [value] : []);
+    };
 
-    const updateCompletion = (updates: Partial<TaskCompletion>) => {
-        setTaskCompletions(prev => {
-            const existingIndex = prev.findIndex(tc => tc.taskId === task.id && tc.customerId === customerId);
-            const baseCompletion = existingIndex > -1 ? prev[existingIndex] : { taskId: task.id, customerId, isCompleted: false };
-            const updatedCompletion = { ...baseCompletion, ...updates };
-            
-            if (!task.csmInputTypes.includes(CSMInputType.Checkbox)) {
-                updatedCompletion.isCompleted = !!updatedCompletion.notes || (updatedCompletion.selectedOptions && updatedCompletion.selectedOptions.length > 0);
+
+    return (
+        <div className="mt-2 p-3 bg-slate-50 rounded-lg space-y-3">
+            {hasCheckbox && (
+                <div className="flex items-center">
+                    <input id={`complete-${task.id}-${customerId}`} type="checkbox" checked={isCompleted} onChange={e => setIsCompleted(e.target.checked)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                    <label htmlFor={`complete-${task.id}-${customerId}`} className="ml-2 block text-sm font-medium text-slate-700">Mark as Complete</label>
+                </div>
+            )}
+            {hasMultiSelect && task.multiSelectOptions && (
+                 <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Response:</label>
+                    <select
+                        value={selectedOptions[0] || ''}
+                        onChange={handleMultiSelectChange}
+                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    >
+                        <option value="">Select an option...</option>
+                        {task.multiSelectOptions.map(opt => (
+                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+            {hasTextArea && (
+                <div>
+                    <label htmlFor={`notes-${task.id}-${customerId}`} className="block text-sm font-medium text-slate-700">Notes:</label>
+                    <textarea id={`notes-${task.id}-${customerId}`} value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+                </div>
+            )}
+            <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+                <Button onClick={handleSave}>Save</Button>
+            </div>
+        </div>
+    )
+}
+
+const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
+    const { 
+        customers, tasks, taskCompletions, setTaskCompletions,
+        actionItems, setActionItems,
+        bugReports, setBugReports,
+        featureRequests, setFeatureRequests,
+        meetingNotes, setMeetingNotes
+    } = useAppContext();
+    
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [showOlderCompleted, setShowOlderCompleted] = useState(false);
+    
+    // Meeting Notes
+    const [currentNotes, setCurrentNotes] = useState('');
+    const [isSummarizing, setIsSummarizing] = useState(false);
+    
+    // Action Items
+    const [newActionItem, setNewActionItem] = useState('');
+
+    // Bug Reports
+    const [newBugName, setNewBugName] = useState('');
+    const [newBugLink, setNewBugLink] = useState('');
+
+    // Feature Requests
+    const [newFeatureRequest, setNewFeatureRequest] = useState('');
+    
+    useEffect(() => {
+        const note = meetingNotes.find(n => n.customerId === customerId);
+        setCurrentNotes(note?.text || '');
+        setEditingTaskId(null); // Reset editing state when customer changes
+    }, [customerId, meetingNotes]);
+    
+    const customer = customers.find(c => c.id === customerId);
+    
+    // Filter all data for the selected customer
+    const customerActionItems = useMemo(() => actionItems.filter(ai => ai.customerId === customerId).sort((a, b) => b.createdAt - a.createdAt), [actionItems, customerId]);
+    const customerBugs = useMemo(() => bugReports.filter(b => b.customerId === customerId).sort((a, b) => b.createdAt - a.createdAt), [bugReports, customerId]);
+    const customerFeatures = useMemo(() => featureRequests.filter(fr => fr.customerId === customerId).sort((a, b) => b.createdAt - a.createdAt), [featureRequests, customerId]);
+    const customerTasks = useMemo(() => tasks.filter(t => !t.isArchived && t.assignedCustomerIds.includes(customerId)).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, customerId]);
+
+    // Meeting Notes Handlers
+    const handleSaveNotes = () => {
+        setMeetingNotes(prev => {
+            const existing = prev.find(n => n.customerId === customerId);
+            if (existing) {
+                return prev.map(n => n.customerId === customerId ? { ...n, text: currentNotes } : n);
             }
-
-            if (existingIndex > -1) {
-                const newCompletions = [...prev];
-                newCompletions[existingIndex] = updatedCompletion;
-                return newCompletions;
-            }
-            return [...prev, updatedCompletion];
+            return [...prev, { customerId, text: currentNotes }];
         });
     };
 
-    const isOverdue = (dueDate: string) => new Date(dueDate) < new Date() && !dueDate.includes('1970');
-
-    const renderInputs = () => {
-        return (
-            <div className="space-y-4">
-                {task.csmInputTypes.map(type => {
-                    switch (type) {
-                        case CSMInputType.Checkbox:
-                            return (
-                                <div key={type} className="flex items-center">
-                                    {/* Fix: Added explicit event type to prevent potential TS errors. */}
-                                    <input type="checkbox" id={`task-${task.id}-checkbox`} checked={completion.isCompleted} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCompletion({ isCompleted: e.target.checked })} className="h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
-                                    <label htmlFor={`task-${task.id}-checkbox`} className="ml-3 font-medium text-slate-700">Mark as complete</label>
-                                </div>
-                            );
-                        case CSMInputType.TextArea:
-                            {/* Fix: Added explicit event type to prevent potential TS errors. */}
-                            return <textarea key={type} value={completion.notes || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateCompletion({ notes: e.target.value })} rows={3} placeholder="Add comments/notes..." className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />;
-                        case CSMInputType.MultiSelect:
-                            return (
-                                // Fix: Reverted to a single-select dropdown as the multi-select listbox was confusing for users.
-                                // The value is stored as an array with one item to maintain data structure compatibility.
-                                <select key={type} value={completion.selectedOptions?.[0] || ''} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateCompletion({ selectedOptions: e.target.value ? [e.target.value] : [] })} className="block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                                    <option value="">Select response...</option>
-                                    {task.multiSelectOptions?.map(opt => <option key={opt.id} value={opt.id}>{opt.id}</option>)}
-                                </select>
-                            );
-                        default:
-                            return null;
-                    }
-                })}
-            </div>
-        );
-    };
-    
-    return (
-        <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-sm">
-            <div className="flex justify-between items-start">
-                <div>
-                    <h4 className="font-semibold text-slate-800">{task.title}</h4>
-                     <MarkdownRenderer content={task.description} className="text-sm text-slate-600 mt-1 prose prose-sm max-w-none" />
-                    <div className="flex items-center gap-4 text-sm mt-2">
-                        {task.fileAttachment && <a href={task.fileAttachment.url} className="text-indigo-600 hover:underline font-medium">View Attachment</a>}
-                        <span className={`font-semibold ${isOverdue(task.dueDate) ? 'text-red-500' : 'text-slate-600'}`}>Due: {task.dueDate}</span>
-                    </div>
-                </div>
-                 <Tag>{task.category}</Tag>
-            </div>
-            <div className="mt-4 pt-4 border-t border-slate-200">
-                {renderInputs()}
-            </div>
-        </div>
-    );
-};
-
-const CustomerAgendaView: React.FC<{ customer: Customer }> = ({ customer }) => {
-    const { tasks, actionItems, setActionItems, taskCompletions } = useAppContext();
-    const [newActionItemText, setNewActionItemText] = useState('');
-    const [showArchivedTasks, setShowArchivedTasks] = useState(false);
-    const [showOlderActionItems, setShowOlderActionItems] = useState(false);
-    const [meetingNotes, setMeetingNotes] = useState('');
-    const [isSummarizing, setIsSummarizing] = useState(false);
-
-    const [editingItemId, setEditingItemId] = useState<string | null>(null);
-    const [editingItemText, setEditingItemText] = useState('');
-
-    const managerTasks = useMemo(() => {
-        const completedTaskIds = new Set(
-            taskCompletions
-                .filter(tc => tc.customerId === customer.id && tc.isCompleted)
-                .map(tc => tc.taskId)
-        );
-
-        return tasks
-            .filter(t => t.assignedCustomerIds.includes(customer.id) && t.isArchived === showArchivedTasks)
-            .sort((a, b) => {
-                const aIsComplete = completedTaskIds.has(a.id);
-                const bIsComplete = completedTaskIds.has(b.id);
-
-                if (aIsComplete && !bIsComplete) {
-                    return 1; // a (complete) comes after b (incomplete)
-                }
-                if (!aIsComplete && bIsComplete) {
-                    return -1; // a (incomplete) comes before b (complete)
-                }
-                // If both have same status, sort by due date descending
-                return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
-            });
-    }, [tasks, customer.id, showArchivedTasks, taskCompletions]);
-
-    const { incompleteItems, visibleCompleteItems, hiddenCompleteItemsCount } = useMemo(() => {
-        const items = actionItems
-            .filter(ai => ai.customerId === customer.id)
-            .sort((a, b) => b.createdAt - a.createdAt); 
-
-        const incomplete = items.filter(item => !item.isCompleted);
-        const complete = items.filter(item => item.isCompleted);
-        
-        const SLICE_LIMIT = 3;
-        const hiddenCount = complete.length > SLICE_LIMIT ? complete.length - SLICE_LIMIT : 0;
-        const visible = showOlderActionItems ? complete : complete.slice(0, SLICE_LIMIT);
-
-        return {
-            incompleteItems: incomplete,
-            visibleCompleteItems: visible,
-            hiddenCompleteItemsCount: showOlderActionItems ? 0 : hiddenCount,
-        };
-    }, [actionItems, customer.id, showOlderActionItems]);
-        
-    const handleAddActionItem = (e: React.FormEvent) => {
-        e.preventDefault();
-        if(!newActionItemText.trim()) return;
-        const newItem: ActionItem = {
-            id: `ai_${Date.now()}`,
-            customerId: customer.id,
-            text: newActionItemText,
-            isCompleted: false,
-            createdAt: Date.now()
-        };
-        setActionItems(prev => [newItem, ...prev]);
-        setNewActionItemText('');
-    };
-    
-    const toggleActionItem = (itemId: string) => {
-        setActionItems(prev => prev.map(item => item.id === itemId ? {...item, isCompleted: !item.isCompleted} : item));
-    };
-
-    const handleDeleteActionItem = (itemId: string) => {
-        if (window.confirm('Are you sure you want to permanently delete this action item?')) {
-            setActionItems(prev => prev.filter(item => item.id !== itemId));
-        }
-    };
-    
     const handleSummarizeNotes = async () => {
-        if (!meetingNotes.trim()) return;
+        if (!currentNotes) return;
         setIsSummarizing(true);
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: "Summarize the following meeting notes into key bullet points using markdown formatting:\n\n" + meetingNotes,
+                contents: `Summarize the following meeting notes into key bullet points and identify any action items: \n\n${currentNotes}`,
             });
-            setMeetingNotes(response.text);
+            setCurrentNotes(prev => `${prev}\n\n**AI Summary:**\n${response.text}`);
         } catch (error) {
-            console.error("Error summarizing notes:", error);
-            alert("Could not summarize notes at this time.");
+            console.error("Failed to summarize notes:", error);
         } finally {
             setIsSummarizing(false);
         }
     };
 
-
-    const handleEditActionItem = (item: ActionItem) => {
-        setEditingItemId(item.id);
-        setEditingItemText(item.text);
-    };
-
-    const handleSaveActionItem = () => {
-        if (!editingItemId || !editingItemText.trim()) {
-            setEditingItemId(null); // Cancel edit if text is empty
-            return;
+    // Action Item Handlers
+    const handleAddActionItem = (e: React.FormEvent) => {
+        e.preventDefault();
+        if(!newActionItem.trim()) return;
+        const newItem: ActionItem = {
+            id: `ai_${Date.now()}`,
+            customerId,
+            text: newActionItem.trim(),
+            isCompleted: false,
+            createdAt: Date.now()
         };
-        setActionItems(prev =>
-            prev.map(item =>
-                item.id === editingItemId ? { ...item, text: editingItemText.trim() } : item
-            )
-        );
-        setEditingItemId(null);
-        setEditingItemText('');
+        setActionItems(prev => [newItem, ...prev]);
+        setNewActionItem('');
     };
     
-    const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            handleSaveActionItem();
-        } else if (e.key === 'Escape') {
-            setEditingItemId(null);
-            setEditingItemText('');
+    const handleToggleActionItem = (id: string, isCompleted: boolean) => {
+        setActionItems(prev => prev.map(ai => ai.id === id ? { ...ai, isCompleted: !isCompleted, completedAt: !isCompleted ? Date.now() : undefined } : ai));
+    };
+
+    const handleDeleteActionItem = (id: string) => {
+        if(window.confirm('Are you sure you want to delete this action item?')) {
+            setActionItems(prev => prev.filter(ai => ai.id !== id));
         }
+    }
+
+    // Bug Report Handlers
+    const handleAddBug = (e: React.FormEvent) => {
+        e.preventDefault();
+        if(!newBugName.trim()) return;
+        const newBug: BugReport = {
+            id: `bug_${Date.now()}`,
+            customerId,
+            name: newBugName.trim(),
+            ticketLink: newBugLink.trim(),
+            isCompleted: false,
+            createdAt: Date.now()
+        };
+        setBugReports(prev => [newBug, ...prev]);
+        setNewBugName('');
+        setNewBugLink('');
+    };
+
+    const handleCompleteBug = (id: string) => {
+        setBugReports(prev => prev.map(b => b.id === id ? { ...b, isCompleted: true, completedAt: Date.now() } : b));
+    };
+    
+    // Feature Request Handlers
+     const handleAddFeatureRequest = (e: React.FormEvent) => {
+        e.preventDefault();
+        if(!newFeatureRequest.trim()) return;
+        const newRequest: FeatureRequest = {
+            id: `fr_${Date.now()}`,
+            customerId,
+            text: newFeatureRequest.trim(),
+            isCompleted: false,
+            createdAt: Date.now()
+        };
+        setFeatureRequests(prev => [newRequest, ...prev]);
+        setNewFeatureRequest('');
+    };
+
+    const handleCompleteFeatureRequest = (id: string) => {
+        setFeatureRequests(prev => prev.map(fr => fr.id === id ? { ...fr, isCompleted: true, completedAt: Date.now() } : fr));
     };
 
 
-    const formatDate = (timestamp: number) => {
-        return new Date(timestamp).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
+    // Task Completion Handlers
+    const handleSaveCompletion = (taskId: string, completionData: Omit<TaskCompletion, 'completedAt' | 'taskId' | 'customerId'>) => {
+        setTaskCompletions(prev => {
+            const existingIndex = prev.findIndex(tc => tc.taskId === taskId && tc.customerId === customerId);
+            const newCompletion: TaskCompletion = { ...completionData, taskId, customerId, completedAt: Date.now() };
+            if (existingIndex > -1) {
+                const updated = [...prev];
+                updated[existingIndex] = newCompletion;
+                return updated;
+            }
+            return [...prev, newCompletion];
         });
+        setEditingTaskId(null);
     };
+
+    // Rendering Logic
+    const incompleteActionItems = customerActionItems.filter(ai => !ai.isCompleted);
+    const completedActionItems = customerActionItems.filter(ai => ai.isCompleted);
+    const visibleCompleted = showOlderCompleted ? completedActionItems : completedActionItems.slice(0, 3);
+
+    const openBugs = customerBugs.filter(b => !b.isCompleted);
+    const completedBugs = customerBugs.filter(b => b.isCompleted);
+
+    const openFeatures = customerFeatures.filter(f => !f.isCompleted);
+    const completedFeatures = customerFeatures.filter(f => f.isCompleted);
+    
+
+    if (!customer) return <div className="flex-grow flex items-center justify-center text-slate-500">Select a customer to see their agenda.</div>;
 
     return (
-        <Card className="flex-1">
-            <h2 className="text-2xl font-bold text-slate-800 mb-6">Agenda: {customer.name}</h2>
-            <div className="space-y-10">
-                 <div>
-                    <h3 className="text-lg font-semibold text-slate-700 mb-3 border-b pb-2">Action Items</h3>
-                    <div className="space-y-3">
-                        {incompleteItems.map(item => (
-                            <div key={item.id} className="group flex items-start justify-between p-3 rounded-md bg-white hover:bg-slate-50">
-                                <div className="flex items-start flex-grow">
-                                    <input type="checkbox" checked={item.isCompleted} onChange={() => toggleActionItem(item.id)} className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"/>
-                                    <div className="ml-3 flex-grow">
-                                        {editingItemId === item.id ? (
-                                            <input
-                                                type="text"
-                                                value={editingItemText}
-                                                onChange={e => setEditingItemText(e.target.value)}
-                                                onBlur={handleSaveActionItem}
-                                                onKeyDown={handleEditKeyDown}
-                                                className="w-full px-1 py-0.5 border border-indigo-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm"
-                                                autoFocus
-                                            />
-                                        ) : (
-                                            <span onClick={() => handleEditActionItem(item)} className="cursor-pointer">{item.text}</span>
-                                        )}
-                                        <span className="block text-xs text-slate-400">Created: {formatDate(item.createdAt)}</span>
-                                    </div>
-                                </div>
-                                <Button variant="danger" onClick={() => handleDeleteActionItem(item.id)} className="px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete item">
-                                    <TrashIcon />
-                                </Button>
+        <div className="flex-grow space-y-4 pb-8 max-h-full overflow-y-auto">
+            <Card>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Action Items</h2>
+                <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4">
+                    <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2 border rounded-md" />
+                    <Button type="submit">Add</Button>
+                </form>
+                <div className="space-y-2">
+                    {incompleteActionItems.map(ai => (
+                         <div key={ai.id} className="flex items-center justify-between p-2 bg-white rounded-md group">
+                            <div className="flex items-center">
+                               <input type="checkbox" checked={false} onChange={() => handleToggleActionItem(ai.id, false)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer" />
+                                <span className="ml-3">{ai.text}</span>
                             </div>
-                        ))}
-                    </div>
-
-                     <form onSubmit={handleAddActionItem} className="mt-4 flex gap-2">
-                        <input type="text" value={newActionItemText} onChange={e => setNewActionItemText(e.target.value)} placeholder="Add new action item..." className="flex-grow px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
-                        <Button type="submit"><PlusIcon/></Button>
-                    </form>
-
-                    {visibleCompleteItems.length > 0 && (
-                        <div className="mt-6">
-                            <h4 className="text-md font-semibold text-slate-600 mb-3 border-b pb-1">Completed</h4>
-                            <div className="space-y-3">
-                                {visibleCompleteItems.map(item => (
-                                    <div key={item.id} className="group flex items-start justify-between p-3 rounded-md bg-slate-50 text-slate-500">
-                                        <div className="flex items-start flex-grow">
-                                            <input type="checkbox" checked={item.isCompleted} onChange={() => toggleActionItem(item.id)} className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"/>
-                                            <div className="ml-3">
-                                                <span className="line-through">{item.text}</span>
-                                                <span className="block text-xs text-slate-400">Created: {formatDate(item.createdAt)}</span>
-                                            </div>
-                                        </div>
-                                         <Button variant="danger" onClick={() => handleDeleteActionItem(item.id)} className="px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete item">
-                                            <TrashIcon />
-                                        </Button>
-                                    </div>
-                                ))}
+                            <button onClick={() => handleDeleteActionItem(ai.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"><TrashIcon /></button>
+                         </div>
+                    ))}
+                    {incompleteActionItems.length === 0 && <p className="text-slate-500 text-sm">No active action items.</p>}
+                </div>
+                 {completedActionItems.length > 0 && <hr className="my-4" />}
+                <div className="space-y-2">
+                     {visibleCompleted.map(ai => (
+                         <div key={ai.id} className="flex items-center justify-between p-2 bg-white rounded-md group">
+                            <div className="flex items-center">
+                               <input type="checkbox" checked={true} onChange={() => handleToggleActionItem(ai.id, true)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer" />
+                                <span className="ml-3 text-slate-500 line-through">{ai.text}</span>
                             </div>
-                            {hiddenCompleteItemsCount > 0 && !showOlderActionItems && (
-                                <div className="text-center mt-4">
-                                    <Button variant="secondary" onClick={() => setShowOlderActionItems(true)}>
-                                        Show {hiddenCompleteItemsCount} older completed items
-                                    </Button>
-                                </div>
-                            )}
-                            {showOlderActionItems && (
-                                <div className="text-center mt-4">
-                                    <Button variant="secondary" onClick={() => setShowOlderActionItems(false)}>
-                                        Show fewer completed items
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
+                             <button onClick={() => handleDeleteActionItem(ai.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"><TrashIcon /></button>
+                         </div>
+                    ))}
+                    {completedActionItems.length > 3 && (
+                        <Button variant="secondary" onClick={() => setShowOlderCompleted(!showOlderCompleted)} className="w-full mt-2">
+                            {showOlderCompleted ? 'Hide older items' : `Show ${completedActionItems.length - 3} older items...`}
+                        </Button>
                     )}
                 </div>
+            </Card>
 
-                <div>
-                    <div className="flex justify-between items-center mb-3 border-b pb-2">
-                        <h3 className="text-lg font-semibold text-slate-700">Additional Items</h3>
-                        <label className="flex items-center text-sm font-medium text-slate-600">
-                             <input id="show-archived" type="checkbox" checked={showArchivedTasks} onChange={e => setShowArchivedTasks(e.target.checked)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 mr-2" />
-                             Show Archived
-                        </label>
+             <Card>
+                <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2"><BugAntIcon /> Open Bugs</h2>
+                <form onSubmit={handleAddBug} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                    <input type="text" value={newBugName} onChange={e => setNewBugName(e.target.value)} placeholder="Bug name or description..." className="p-2 border rounded-md" required />
+                    <div className="flex gap-2">
+                        <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Link to ticket (e.g., ClickUp)..." className="flex-grow p-2 border rounded-md" />
+                        <Button type="submit">Add Bug</Button>
                     </div>
-                    <div className="space-y-4">
-                        {managerTasks.length > 0 ? managerTasks.map(task => (
-                            <ManagerTaskItem key={task.id} task={task} customerId={customer.id} />
-                        )) : <p className="text-slate-500 py-4 text-center">No {showArchivedTasks ? 'archived' : 'active'} items.</p>}
+                </form>
+                <div className="space-y-2">
+                    {openBugs.map(bug => (
+                        <div key={bug.id} className="flex justify-between items-center p-2">
+                            <div>
+                                <p>{bug.name}</p>
+                                {bug.ticketLink && <a href={bug.ticketLink} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline flex items-center gap-1"><LinkIcon />Ticket</a>}
+                            </div>
+                            <Button variant="secondary" onClick={() => handleCompleteBug(bug.id)}>Complete</Button>
+                        </div>
+                    ))}
+                    {openBugs.length === 0 && <p className="text-slate-500 text-sm">No open bugs.</p>}
+                     {completedBugs.length > 0 && <p className="text-xs text-slate-400 mt-2">{completedBugs.length} completed bugs are archived.</p>}
+                </div>
+            </Card>
+            
+            <details className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200">
+                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center gap-2 list-none"><LightBulbIcon /> Feature Requests <ChevronDownIcon className="ml-auto transition-transform transform open:-rotate-180" /></summary>
+                <div className="p-6 pt-0">
+                    <form onSubmit={handleAddFeatureRequest} className="flex gap-2 mb-4">
+                        <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="Add a new feature request..." className="flex-grow p-2 border rounded-md" />
+                        <Button type="submit">Add Request</Button>
+                    </form>
+                    <div className="space-y-2">
+                        {openFeatures.map(fr => (
+                            <div key={fr.id} className="flex justify-between items-center p-2">
+                                <p>{fr.text}</p>
+                                <Button variant="secondary" onClick={() => handleCompleteFeatureRequest(fr.id)}>Complete</Button>
+                            </div>
+                        ))}
+                        {openFeatures.length === 0 && <p className="text-slate-500 text-sm">No open feature requests.</p>}
+                        {completedFeatures.length > 0 && <p className="text-xs text-slate-400 mt-2">{completedFeatures.length} completed requests are archived.</p>}
                     </div>
                 </div>
-                 
-                 <div>
-                    <div className="flex justify-between items-center mb-3 border-b pb-2">
-                        <h3 className="text-lg font-semibold text-slate-700">Meeting Notes</h3>
-                        <Button variant="secondary" onClick={handleSummarizeNotes} disabled={isSummarizing || !meetingNotes.trim()}>
-                           <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
-                        </Button>
-                    </div>
-                    <textarea value={meetingNotes} onChange={e => setMeetingNotes(e.target.value)} rows={6} placeholder="General notes for this customer..." className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+            </details>
+
+            <Card>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Additional Items</h2>
+                <div className="space-y-4">
+                    {customerTasks.map(task => {
+                        const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customerId);
+                        const isEditing = editingTaskId === task.id;
+                        const isComplete = completion?.isCompleted || false;
+
+                        return (
+                             <div key={task.id} className={`p-3 rounded-md border ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-start flex-grow">
+                                        {isComplete ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
+                                        <div>
+                                            <p className="font-semibold text-slate-800">{task.title}</p>
+                                            <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {task.dueDate}</p>
+                                            {isComplete && completion && (
+                                                <div className="text-sm mt-1 text-slate-600 italic space-y-1">
+                                                    {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: "{completion.notes}"</p>}
+                                                    {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
+                                                        <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
+                                                    }
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {!isEditing && (
+                                        <Button variant="secondary" onClick={() => setEditingTaskId(task.id)}>
+                                            {completion ? 'Edit' : 'Complete'}
+                                        </Button>
+                                    )}
+                                </div>
+                                {isEditing && (
+                                    <TaskCompletionForm 
+                                        task={task} 
+                                        customerId={customerId} 
+                                        existingCompletion={completion} 
+                                        onSave={(data) => handleSaveCompletion(task.id, data)}
+                                        onCancel={() => setEditingTaskId(null)}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
+                    {customerTasks.length === 0 && <p className="text-slate-500 text-center py-4">No additional items from manager.</p>}
                 </div>
-            </div>
-        </Card>
+            </Card>
+
+            <Card>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Meeting Notes</h2>
+                 <textarea value={currentNotes} onChange={e => setCurrentNotes(e.target.value)} rows={6} className="w-full p-2 border rounded-md" placeholder="Start typing notes for your meeting..."></textarea>
+                 <div className="flex justify-end gap-2 mt-2">
+                    <Button variant="secondary" onClick={handleSaveNotes}>Save Notes</Button>
+                    <Button onClick={handleSummarizeNotes} disabled={isSummarizing}>
+                        <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
+                    </Button>
+                 </div>
+            </Card>
+        </div>
     );
 };
 
+
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
-    const { customers, tasks, taskCompletions } = useAppContext();
+    const { customers, csms } = useAppContext();
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-    const [isCustomerListCollapsed, setIsCustomerListCollapsed] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-
-    const myCustomers = useMemo(() => 
+    const csm = csms.find(c => c.id === csmId);
+    
+    const csmCustomers = useMemo(() => 
         customers
             .filter(c => c.assignedCsmId === csmId)
             .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-            .sort((a, b) => a.name.localeCompare(b.name)), 
-    [customers, csmId, searchQuery]);
+    , [customers, csmId, searchQuery]);
 
-    const selectedCustomer = useMemo(() => myCustomers.find(c => c.id === selectedCustomerId), [myCustomers, selectedCustomerId]);
-    
-    useState(() => {
-        if (myCustomers.length > 0 && !selectedCustomerId) {
-            setSelectedCustomerId(myCustomers[0].id);
+    useEffect(() => {
+        if (csmCustomers.length > 0 && !csmCustomers.find(c => c.id === selectedCustomerId)) {
+            setSelectedCustomerId(csmCustomers[0].id);
+        } else if (csmCustomers.length === 0) {
+            setSelectedCustomerId(null);
         }
-    });
-
-    const getOpenTaskCount = (customerId: string) => {
-        const assignedTasks = tasks.filter(t => !t.isArchived && t.assignedCustomerIds.includes(customerId));
-        const completedTaskIds = new Set(taskCompletions.filter(tc => tc.customerId === customerId && tc.isCompleted).map(tc => tc.taskId));
-        return assignedTasks.filter(t => !completedTaskIds.has(t.id)).length;
+    }, [csmCustomers, selectedCustomerId]);
+    
+    if (!csm) {
+        return <div className="text-center text-slate-500">Please select a CSM to view their agenda.</div>;
     }
 
     return (
-        <div className="flex gap-6 items-start">
-            <Card className="w-1/3">
-                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-slate-700">My Customers</h2>
-                     <button
-                        onClick={() => setIsCustomerListCollapsed(!isCustomerListCollapsed)}
-                        className="p-1 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800"
-                        aria-label={isCustomerListCollapsed ? 'Expand customer list' : 'Collapse customer list'}
-                    >
-                        <ChevronDownIcon className={`transition-transform ${isCustomerListCollapsed ? '' : 'rotate-180'}`} />
-                    </button>
-                </div>
-
-                <div className="relative mb-4">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><SearchIcon/></span>
-                    <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search customers..." className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
-                </div>
-                
-                {!isCustomerListCollapsed && (
-                    <ul className="space-y-2">
-                        {myCustomers.map(customer => {
-                            const openTasks = getOpenTaskCount(customer.id);
-                            return (
-                                <li key={customer.id}>
-                                    <button onClick={() => setSelectedCustomerId(customer.id)} className={`w-full text-left p-3 rounded-md transition-colors ${selectedCustomerId === customer.id ? 'bg-indigo-100 text-indigo-800' : 'hover:bg-slate-100'}`}>
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-semibold">{customer.name}</span>
-                                            {openTasks > 0 && <Tag color="bg-red-100 text-red-800">{openTasks} open</Tag>}
-                                        </div>
+        <div>
+            <h1 className="text-3xl font-bold text-slate-800 mb-6">CSM Agenda: {csm.name}</h1>
+            <div className="flex flex-col md:flex-row gap-6 md:h-[calc(100vh-200px)]">
+                {/* Left Column: Customer List */}
+                <div className="md:w-1/3 lg:w-1/4 flex-shrink-0">
+                    <Card className="h-full flex flex-col">
+                         <div className="relative mb-4">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon/></span>
+                            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search customers..." className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md" />
+                        </div>
+                        <h2 className="text-lg font-semibold text-slate-700 mb-2">My Customers ({csmCustomers.length})</h2>
+                        <div className="flex-grow overflow-y-auto -mr-2 pr-2">
+                             <div className="space-y-2">
+                                {csmCustomers.map(customer => (
+                                    <button 
+                                        key={customer.id} 
+                                        onClick={() => setSelectedCustomerId(customer.id)}
+                                        className={`w-full text-left p-3 rounded-md transition-colors ${selectedCustomerId === customer.id ? 'bg-indigo-100 text-indigo-800 font-semibold' : 'hover:bg-slate-100'}`}
+                                    >
+                                        {customer.name}
                                     </button>
-                                </li>
-                            )
-                        })}
-                        {myCustomers.length === 0 && <p className="text-center text-slate-500 py-2 text-sm">No customers found.</p>}
-                    </ul>
-                )}
-            </Card>
-
-            <div className="w-2/3">
-                {selectedCustomer ? (
-                    <CustomerAgendaView customer={selectedCustomer} />
-                ) : (
-                    <Card className="flex flex-col items-center justify-center h-96 text-center">
-                        <ClipboardListIcon/>
-                        <h3 className="mt-2 text-lg font-medium text-slate-800">Select a Customer</h3>
-                        <p className="mt-1 text-sm text-slate-500">Choose a customer from the list to view their agenda.</p>
+                                ))}
+                            </div>
+                        </div>
                     </Card>
-                )}
+                </div>
+
+                {/* Right Column: Customer Agenda */}
+                <div className="flex-grow md:w-2/3 lg:w-3/4">
+                    {selectedCustomerId ? <CustomerAgenda customerId={selectedCustomerId} /> : (
+                        <div className="h-full flex items-center justify-center bg-white rounded-lg shadow-sm">
+                            <p className="text-slate-500">
+                                {csmCustomers.length > 0 ? "Select a customer to view their agenda." : "You have no assigned customers."}
+                            </p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
