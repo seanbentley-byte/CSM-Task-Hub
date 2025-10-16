@@ -17,36 +17,21 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const loadFromStorage = <T,>(key: string, fallback: T): T => {
-    try {
-        const stored = localStorage.getItem(key);
-        if (stored) {
-            return JSON.parse(stored);
-        }
-    } catch (error) {
-        console.error(`Error parsing ${key} from localStorage`, error);
-    }
-    return fallback;
-};
-
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [csms, setCsms] = useState<CSM[]>(() => loadFromStorage('csms', initialCsms));
-  const [customers, setCustomers] = useState<Customer[]>(() => loadFromStorage('customers', initialCustomers));
+  // In a real application, you would fetch this data from an API instead of using initialData.
+  const [csms, setCsms] = useState<CSM[]>(initialCsms);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>(initialTaskCompletions);
   const [actionItems, setActionItems] = useState<ActionItem[]>(initialActionItems);
 
-  useEffect(() => {
-    localStorage.setItem('csms', JSON.stringify(csms));
-  }, [csms]);
-
-  useEffect(() => {
-    localStorage.setItem('customers', JSON.stringify(customers));
-  }, [customers]);
+  // Note: The useEffect hooks for localStorage have been removed to prepare for a backend.
+  // In a real application, state updates would trigger API calls (e.g., using React Query or SWR)
+  // instead of writing to local storage.
 
   const value = {
     csms,
-    setCsms,
+    setCsms, // In a real app, this might be replaced by functions like `addCsm`, `updateCsm`
     customers,
     setCustomers,
     tasks,

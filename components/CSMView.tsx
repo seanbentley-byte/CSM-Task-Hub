@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Task, Customer, CSMInputType, TaskCompletion, ActionItem } from '../types';
 import { useAppContext } from './AppContext';
-import { Card, Button, Tag, ClipboardListIcon, PlusIcon, ChevronDownIcon } from './ui';
+import { Card, Button, Tag, ClipboardListIcon, PlusIcon, ChevronDownIcon, TrashIcon, MarkdownRenderer, SparklesIcon, SearchIcon } from './ui';
+import { GoogleGenAI } from '@google/genai';
+
 
 const ManagerTaskItem: React.FC<{ task: Task; customerId: string }> = ({ task, customerId }) => {
     const { taskCompletions, setTaskCompletions } = useAppContext();
@@ -40,17 +42,21 @@ const ManagerTaskItem: React.FC<{ task: Task; customerId: string }> = ({ task, c
                         case CSMInputType.Checkbox:
                             return (
                                 <div key={type} className="flex items-center">
-                                    <input type="checkbox" id={`task-${task.id}-checkbox`} checked={completion.isCompleted} onChange={(e) => updateCompletion({ isCompleted: e.target.checked })} className="h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                                    {/* Fix: Added explicit event type to prevent potential TS errors. */}
+                                    <input type="checkbox" id={`task-${task.id}-checkbox`} checked={completion.isCompleted} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCompletion({ isCompleted: e.target.checked })} className="h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
                                     <label htmlFor={`task-${task.id}-checkbox`} className="ml-3 font-medium text-slate-700">Mark as complete</label>
                                 </div>
                             );
                         case CSMInputType.TextArea:
-                            return <textarea key={type} value={completion.notes || ''} onChange={(e) => updateCompletion({ notes: e.target.value })} rows={3} placeholder="Add comments/notes..." className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />;
+                            {/* Fix: Added explicit event type to prevent potential TS errors. */}
+                            return <textarea key={type} value={completion.notes || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateCompletion({ notes: e.target.value })} rows={3} placeholder="Add comments/notes..." className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />;
                         case CSMInputType.MultiSelect:
                             return (
-                                <select key={type} value={completion.selectedOptions || []} onChange={(e) => updateCompletion({ selectedOptions: Array.from(e.target.selectedOptions, option => option.value) })} className="block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                                    <option value="" disabled>Select response...</option>
-                                    {task.multiSelectOptions?.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                                // Fix: Reverted to a single-select dropdown as the multi-select listbox was confusing for users.
+                                // The value is stored as an array with one item to maintain data structure compatibility.
+                                <select key={type} value={completion.selectedOptions?.[0] || ''} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateCompletion({ selectedOptions: e.target.value ? [e.target.value] : [] })} className="block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                    <option value="">Select response...</option>
+                                    {task.multiSelectOptions?.map(opt => <option key={opt.id} value={opt.id}>{opt.id}</option>)}
                                 </select>
                             );
                         default:
@@ -66,7 +72,7 @@ const ManagerTaskItem: React.FC<{ task: Task; customerId: string }> = ({ task, c
             <div className="flex justify-between items-start">
                 <div>
                     <h4 className="font-semibold text-slate-800">{task.title}</h4>
-                    <p className="text-sm text-slate-600 mt-1">{task.description}</p>
+                     <MarkdownRenderer content={task.description} className="text-sm text-slate-600 mt-1 prose prose-sm max-w-none" />
                     <div className="flex items-center gap-4 text-sm mt-2">
                         {task.fileAttachment && <a href={task.fileAttachment.url} className="text-indigo-600 hover:underline font-medium">View Attachment</a>}
                         <span className={`font-semibold ${isOverdue(task.dueDate) ? 'text-red-500' : 'text-slate-600'}`}>Due: {task.dueDate}</span>
@@ -82,17 +88,39 @@ const ManagerTaskItem: React.FC<{ task: Task; customerId: string }> = ({ task, c
 };
 
 const CustomerAgendaView: React.FC<{ customer: Customer }> = ({ customer }) => {
-    const { tasks, actionItems, setActionItems } = useAppContext();
+    const { tasks, actionItems, setActionItems, taskCompletions } = useAppContext();
     const [newActionItemText, setNewActionItemText] = useState('');
     const [showArchivedTasks, setShowArchivedTasks] = useState(false);
     const [showOlderActionItems, setShowOlderActionItems] = useState(false);
+    const [meetingNotes, setMeetingNotes] = useState('');
+    const [isSummarizing, setIsSummarizing] = useState(false);
 
     const [editingItemId, setEditingItemId] = useState<string | null>(null);
     const [editingItemText, setEditingItemText] = useState('');
 
-    const managerTasks = useMemo(() => tasks
-        .filter(t => t.assignedCustomerIds.includes(customer.id) && t.isArchived === showArchivedTasks)
-        .sort((a,b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()), [tasks, customer.id, showArchivedTasks]);
+    const managerTasks = useMemo(() => {
+        const completedTaskIds = new Set(
+            taskCompletions
+                .filter(tc => tc.customerId === customer.id && tc.isCompleted)
+                .map(tc => tc.taskId)
+        );
+
+        return tasks
+            .filter(t => t.assignedCustomerIds.includes(customer.id) && t.isArchived === showArchivedTasks)
+            .sort((a, b) => {
+                const aIsComplete = completedTaskIds.has(a.id);
+                const bIsComplete = completedTaskIds.has(b.id);
+
+                if (aIsComplete && !bIsComplete) {
+                    return 1; // a (complete) comes after b (incomplete)
+                }
+                if (!aIsComplete && bIsComplete) {
+                    return -1; // a (incomplete) comes before b (complete)
+                }
+                // If both have same status, sort by due date descending
+                return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
+            });
+    }, [tasks, customer.id, showArchivedTasks, taskCompletions]);
 
     const { incompleteItems, visibleCompleteItems, hiddenCompleteItemsCount } = useMemo(() => {
         const items = actionItems
@@ -102,8 +130,9 @@ const CustomerAgendaView: React.FC<{ customer: Customer }> = ({ customer }) => {
         const incomplete = items.filter(item => !item.isCompleted);
         const complete = items.filter(item => item.isCompleted);
         
-        const hiddenCount = complete.length > 5 ? complete.length - 5 : 0;
-        const visible = showOlderActionItems ? complete : complete.slice(0, 5);
+        const SLICE_LIMIT = 3;
+        const hiddenCount = complete.length > SLICE_LIMIT ? complete.length - SLICE_LIMIT : 0;
+        const visible = showOlderActionItems ? complete : complete.slice(0, SLICE_LIMIT);
 
         return {
             incompleteItems: incomplete,
@@ -129,6 +158,31 @@ const CustomerAgendaView: React.FC<{ customer: Customer }> = ({ customer }) => {
     const toggleActionItem = (itemId: string) => {
         setActionItems(prev => prev.map(item => item.id === itemId ? {...item, isCompleted: !item.isCompleted} : item));
     };
+
+    const handleDeleteActionItem = (itemId: string) => {
+        if (window.confirm('Are you sure you want to permanently delete this action item?')) {
+            setActionItems(prev => prev.filter(item => item.id !== itemId));
+        }
+    };
+    
+    const handleSummarizeNotes = async () => {
+        if (!meetingNotes.trim()) return;
+        setIsSummarizing(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: "Summarize the following meeting notes into key bullet points using markdown formatting:\n\n" + meetingNotes,
+            });
+            setMeetingNotes(response.text);
+        } catch (error) {
+            console.error("Error summarizing notes:", error);
+            alert("Could not summarize notes at this time.");
+        } finally {
+            setIsSummarizing(false);
+        }
+    };
+
 
     const handleEditActionItem = (item: ActionItem) => {
         setEditingItemId(item.id);
@@ -175,24 +229,29 @@ const CustomerAgendaView: React.FC<{ customer: Customer }> = ({ customer }) => {
                     <h3 className="text-lg font-semibold text-slate-700 mb-3 border-b pb-2">Action Items</h3>
                     <div className="space-y-3">
                         {incompleteItems.map(item => (
-                            <div key={item.id} className="flex items-start p-3 rounded-md bg-white hover:bg-slate-50">
-                                <input type="checkbox" checked={item.isCompleted} onChange={() => toggleActionItem(item.id)} className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"/>
-                                <div className="ml-3 flex-grow">
-                                    {editingItemId === item.id ? (
-                                        <input
-                                            type="text"
-                                            value={editingItemText}
-                                            onChange={e => setEditingItemText(e.target.value)}
-                                            onBlur={handleSaveActionItem}
-                                            onKeyDown={handleEditKeyDown}
-                                            className="w-full px-1 py-0.5 border border-indigo-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm"
-                                            autoFocus
-                                        />
-                                    ) : (
-                                        <span onClick={() => handleEditActionItem(item)} className="cursor-pointer">{item.text}</span>
-                                    )}
-                                    <span className="block text-xs text-slate-400">Created: {formatDate(item.createdAt)}</span>
+                            <div key={item.id} className="group flex items-start justify-between p-3 rounded-md bg-white hover:bg-slate-50">
+                                <div className="flex items-start flex-grow">
+                                    <input type="checkbox" checked={item.isCompleted} onChange={() => toggleActionItem(item.id)} className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"/>
+                                    <div className="ml-3 flex-grow">
+                                        {editingItemId === item.id ? (
+                                            <input
+                                                type="text"
+                                                value={editingItemText}
+                                                onChange={e => setEditingItemText(e.target.value)}
+                                                onBlur={handleSaveActionItem}
+                                                onKeyDown={handleEditKeyDown}
+                                                className="w-full px-1 py-0.5 border border-indigo-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm"
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <span onClick={() => handleEditActionItem(item)} className="cursor-pointer">{item.text}</span>
+                                        )}
+                                        <span className="block text-xs text-slate-400">Created: {formatDate(item.createdAt)}</span>
+                                    </div>
                                 </div>
+                                <Button variant="danger" onClick={() => handleDeleteActionItem(item.id)} className="px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete item">
+                                    <TrashIcon />
+                                </Button>
                             </div>
                         ))}
                     </div>
@@ -207,12 +266,17 @@ const CustomerAgendaView: React.FC<{ customer: Customer }> = ({ customer }) => {
                             <h4 className="text-md font-semibold text-slate-600 mb-3 border-b pb-1">Completed</h4>
                             <div className="space-y-3">
                                 {visibleCompleteItems.map(item => (
-                                    <div key={item.id} className="flex items-start p-3 rounded-md bg-slate-50 text-slate-500">
-                                        <input type="checkbox" checked={item.isCompleted} onChange={() => toggleActionItem(item.id)} className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"/>
-                                        <div className="ml-3">
-                                            <span className="line-through">{item.text}</span>
-                                            <span className="block text-xs text-slate-400">Created: {formatDate(item.createdAt)}</span>
+                                    <div key={item.id} className="group flex items-start justify-between p-3 rounded-md bg-slate-50 text-slate-500">
+                                        <div className="flex items-start flex-grow">
+                                            <input type="checkbox" checked={item.isCompleted} onChange={() => toggleActionItem(item.id)} className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 flex-shrink-0"/>
+                                            <div className="ml-3">
+                                                <span className="line-through">{item.text}</span>
+                                                <span className="block text-xs text-slate-400">Created: {formatDate(item.createdAt)}</span>
+                                            </div>
                                         </div>
+                                         <Button variant="danger" onClick={() => handleDeleteActionItem(item.id)} className="px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete item">
+                                            <TrashIcon />
+                                        </Button>
                                     </div>
                                 ))}
                             </div>
@@ -250,8 +314,13 @@ const CustomerAgendaView: React.FC<{ customer: Customer }> = ({ customer }) => {
                 </div>
                  
                  <div>
-                    <h3 className="text-lg font-semibold text-slate-700 mb-3 border-b pb-2">Meeting Notes</h3>
-                    <textarea rows={6} placeholder="General notes for this customer..." className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+                    <div className="flex justify-between items-center mb-3 border-b pb-2">
+                        <h3 className="text-lg font-semibold text-slate-700">Meeting Notes</h3>
+                        <Button variant="secondary" onClick={handleSummarizeNotes} disabled={isSummarizing || !meetingNotes.trim()}>
+                           <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
+                        </Button>
+                    </div>
+                    <textarea value={meetingNotes} onChange={e => setMeetingNotes(e.target.value)} rows={6} placeholder="General notes for this customer..." className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
                 </div>
             </div>
         </Card>
@@ -262,8 +331,15 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const { customers, tasks, taskCompletions } = useAppContext();
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [isCustomerListCollapsed, setIsCustomerListCollapsed] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
-    const myCustomers = useMemo(() => customers.filter(c => c.assignedCsmId === csmId).sort((a, b) => a.name.localeCompare(b.name)), [customers, csmId]);
+
+    const myCustomers = useMemo(() => 
+        customers
+            .filter(c => c.assignedCsmId === csmId)
+            .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+            .sort((a, b) => a.name.localeCompare(b.name)), 
+    [customers, csmId, searchQuery]);
 
     const selectedCustomer = useMemo(() => myCustomers.find(c => c.id === selectedCustomerId), [myCustomers, selectedCustomerId]);
     
@@ -282,7 +358,7 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     return (
         <div className="flex gap-6 items-start">
             <Card className="w-1/3">
-                <div className="flex justify-between items-center mb-4">
+                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-slate-700">My Customers</h2>
                      <button
                         onClick={() => setIsCustomerListCollapsed(!isCustomerListCollapsed)}
@@ -292,6 +368,12 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
                         <ChevronDownIcon className={`transition-transform ${isCustomerListCollapsed ? '' : 'rotate-180'}`} />
                     </button>
                 </div>
+
+                <div className="relative mb-4">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><SearchIcon/></span>
+                    <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search customers..." className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+                </div>
+                
                 {!isCustomerListCollapsed && (
                     <ul className="space-y-2">
                         {myCustomers.map(customer => {
@@ -307,6 +389,7 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
                                 </li>
                             )
                         })}
+                        {myCustomers.length === 0 && <p className="text-center text-slate-500 py-2 text-sm">No customers found.</p>}
                     </ul>
                 )}
             </Card>

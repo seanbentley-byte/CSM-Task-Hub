@@ -1,4 +1,3 @@
-
 import React, { ReactNode } from 'react';
 
 export const Card: React.FC<{ children: ReactNode; className?: string }> = ({ children, className = '' }) => (
@@ -15,7 +14,7 @@ export const Button: React.FC<
     variant?: 'primary' | 'secondary' | 'danger';
   } & React.ComponentPropsWithoutRef<'button'>
 > = ({ children, variant = 'primary', className = '', type = 'button', ...props }) => {
-  const baseClasses = 'px-4 py-2 rounded-md font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseClasses = 'inline-flex items-center gap-2 px-4 py-2 rounded-md font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
   const variantClasses = {
     primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500',
     secondary: 'bg-slate-200 text-slate-800 hover:bg-slate-300 focus:ring-slate-400',
@@ -50,6 +49,53 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
     </div>
   );
 };
+
+const markdownToHtml = (markdown: string): { __html: string } => {
+    if (!markdown) return { __html: '' };
+
+    let html = markdown
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br />')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">$1</a>');
+
+    // Handle bullet points
+    const lines = html.split('<br />');
+    let inList = false;
+    const processedLines = lines.map(line => {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ')) {
+            const itemContent = trimmedLine.substring(2);
+            if (!inList) {
+                inList = true;
+                return `<ul><li>${itemContent}</li>`;
+            } else {
+                return `<li>${itemContent}</li>`;
+            }
+        } else {
+            if (inList) {
+                inList = false;
+                return `</ul>${line}`;
+            }
+            return line;
+        }
+    });
+
+    if (inList) {
+        processedLines.push('</ul>');
+    }
+
+    return { __html: processedLines.join('').replace(/<\/li><li>/g, '</li><li>') };
+};
+
+
+export const MarkdownRenderer: React.FC<{ content: string; className?: string }> = ({ content, className = '' }) => {
+    return <div className={className} dangerouslySetInnerHTML={markdownToHtml(content)} />;
+};
+
 
 // Icons
 export const PlusIcon = () => (
@@ -113,5 +159,23 @@ export const PencilIcon = () => (
 export const SearchIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+    </svg>
+);
+
+export const TrashIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+    </svg>
+);
+
+export const DownloadIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 9.707a1 1 0 011.414 0L9 11.086V3a1 1 0 112 0v8.086l1.293-1.379a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+    </svg>
+);
+
+export const SparklesIcon = ({ className = 'h-5 w-5' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1.158A3.001 3.001 0 017.158 7H6a1 1 0 01-1-1V4a1 1 0 011-1h1a1 1 0 011 1v2h1.158A3.001 3.001 0 0113 5.158V4a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 01-1 1h-1.158A3.001 3.001 0 0110.842 7H12a1 1 0 011 1v2a1 1 0 01-1 1h-1a1 1 0 01-1-1V8h-1.158A3.001 3.001 0 017 10.842V12a1 1 0 01-1 1H4a1 1 0 01-1-1v-1a1 1 0 011-1h1.158A3.001 3.001 0 017.158 7H6a1 1 0 01-1-1V4a1 1 0 011-1zm10.293 8.293a1 1 0 011.414 0l1 1a1 1 0 01-1.414 1.414l-1-1a1 1 0 010-1.414zM11 15a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" />
     </svg>
 );

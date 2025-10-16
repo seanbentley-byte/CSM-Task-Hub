@@ -1,9 +1,97 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Task, CSMInputType, TaskCategory } from '../types';
+import { Task, CSMInputType, TaskCategory, MultiSelectOption, Customer, CSM } from '../types';
 import { useAppContext } from './AppContext';
-import { Card, Button, Modal, Tag, PlusIcon, ArchiveIcon, ChevronDownIcon, CheckCircleIcon, UsersIcon, PencilIcon, SearchIcon } from './ui';
+import { Card, Button, Modal, Tag, PlusIcon, ArchiveIcon, ChevronDownIcon, CheckCircleIcon, UsersIcon, PencilIcon, SearchIcon, TrashIcon, DownloadIcon, MarkdownRenderer, SparklesIcon } from './ui';
+import { GoogleGenAI, Type } from '@google/genai';
 
-const TaskFormModal: React.FC<{ isOpen: boolean; onClose: () => void; editingTask: Task | null }> = ({ isOpen, onClose, editingTask }) => {
+interface AIGeneratedTaskData {
+    title: string;
+    description: string;
+    category: TaskCategory;
+    csmInputTypes: CSMInputType[];
+}
+
+const AITaskModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void;
+    onTaskGenerated: (data: AIGeneratedTaskData) => void;
+}> = ({ isOpen, onClose, onTaskGenerated }) => {
+    const [prompt, setPrompt] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleGenerate = async () => {
+        if (!prompt) return;
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: `Parse the following request and generate a task object based on the provided schema. The request is: "${prompt}". The description should be suitable for a customer success manager and support markdown formatting.`,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            title: { type: Type.STRING },
+                            description: { type: Type.STRING },
+                            category: { type: Type.STRING, enum: Object.values(TaskCategory) },
+                            csmInputTypes: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING, enum: Object.values(CSMInputType) }
+                            },
+                        },
+                        required: ['title', 'description', 'category', 'csmInputTypes']
+                    },
+                },
+            });
+
+            const generatedData = JSON.parse(response.text);
+            onTaskGenerated(generatedData);
+            onClose();
+
+        } catch (e) {
+            console.error(e);
+            setError('Failed to generate task. Please try again or rephrase your prompt.');
+        } finally {
+            setIsLoading(false);
+            setPrompt('');
+        }
+    };
+    
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Generate Task with AI">
+            <div className="space-y-4">
+                <p className="text-sm text-slate-600">Describe the task you want to create. For example: "Create a task to announce the new feature X, it should be a simple checkbox acknowledgment."</p>
+                <textarea 
+                    value={prompt}
+                    onChange={e => setPrompt(e.target.value)}
+                    rows={4}
+                    placeholder="Enter task description here..."
+                    className="w-full p-2 border rounded-md"
+                    disabled={isLoading}
+                />
+                {error && <p className="text-red-500 text-sm">{error}</p>}
+                <div className="flex justify-end gap-2">
+                    <Button variant="secondary" onClick={onClose} disabled={isLoading}>Cancel</Button>
+                    <Button onClick={handleGenerate} disabled={isLoading}>
+                        {isLoading ? 'Generating...' : 'Generate Task'}
+                    </Button>
+                </div>
+            </div>
+        </Modal>
+    )
+};
+
+
+const TaskFormModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    editingTask: Task | null;
+    initialData?: Partial<AIGeneratedTaskData>;
+}> = ({ isOpen, onClose, editingTask, initialData }) => {
     const { customers, setTasks } = useAppContext();
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -16,27 +104,18 @@ const TaskFormModal: React.FC<{ isOpen: boolean; onClose: () => void; editingTas
 
     useEffect(() => {
         if (isOpen) {
-            if (editingTask) {
-                setTitle(editingTask.title);
-                setDescription(editingTask.description);
-                setDueDate(editingTask.dueDate);
-                setCategory(editingTask.category);
-                setCsmInputTypes(editingTask.csmInputTypes);
-                setMultiSelectOptionsStr(editingTask.multiSelectOptions?.map(o => o.label).join(', ') || '');
-                setSelectedCustomerIds(editingTask.assignedCustomerIds);
-                setAssignToAll(editingTask.assignedCustomerIds.length === customers.length);
-            } else {
-                setTitle('');
-                setDescription('');
-                setDueDate('');
-                setCategory(TaskCategory.Other);
-                setCsmInputTypes([CSMInputType.Checkbox]);
-                setMultiSelectOptionsStr('');
-                setSelectedCustomerIds([]);
-                setAssignToAll(false);
-            }
+            const data = editingTask || initialData;
+            setTitle(data?.title || '');
+            setDescription(data?.description || '');
+            setDueDate(editingTask?.dueDate || '');
+            setCategory(data?.category || TaskCategory.Other);
+            setCsmInputTypes(data?.csmInputTypes || [CSMInputType.Checkbox]);
+            setMultiSelectOptionsStr(editingTask?.multiSelectOptions?.map(o => o.label).join(', ') || '');
+            setSelectedCustomerIds(editingTask?.assignedCustomerIds || []);
+            setAssignToAll(editingTask?.assignedCustomerIds.length === customers.length);
+
         }
-    }, [editingTask, isOpen, customers]);
+    }, [editingTask, initialData, isOpen, customers]);
 
     const handleInputTypeChange = (type: CSMInputType, checked: boolean) => {
         if (checked) {
@@ -94,7 +173,7 @@ const TaskFormModal: React.FC<{ isOpen: boolean; onClose: () => void; editingTas
                     <input type="text" value={title} onChange={e => setTitle(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-slate-700">Description</label>
+                    <label className="block text-sm font-medium text-slate-700">Description (Markdown supported)</label>
                     <textarea value={description} onChange={e => setDescription(e.target.value)} required rows={3} className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
                 </div>
                 <div>
@@ -248,7 +327,7 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
                                     <p className="text-sm text-slate-500">CSM: {csm?.name || 'Unassigned'}</p>
                                     {completion?.isCompleted && (
                                         <div className="text-sm mt-1 text-slate-600 italic space-y-1">
-                                            {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: "{completion.notes}"</p>}
+                                            {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: <MarkdownRenderer content={completion.notes} className="inline-block" /></p>}
                                             {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
                                                 <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
                                             }
@@ -266,10 +345,86 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
     );
 };
 
+const DashboardStats: React.FC = () => {
+    const { csms, customers, tasks, taskCompletions } = useAppContext();
+
+    const stats = useMemo(() => {
+        const activeTasks = tasks.filter(t => !t.isArchived);
+        const now = new Date();
+        const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+        const getTaskCompletionPercent = (task: Task) => {
+            if (task.assignedCustomerIds.length === 0) return 100;
+            const completedCount = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted).length;
+            return (completedCount / task.assignedCustomerIds.length) * 100;
+        };
+
+        const overdueTasks = activeTasks.filter(t => new Date(t.dueDate) < now && getTaskCompletionPercent(t) < 100).length;
+        const dueSoonTasks = activeTasks.filter(t => {
+            const dueDate = new Date(t.dueDate);
+            return dueDate >= now && dueDate <= sevenDaysFromNow && getTaskCompletionPercent(t) < 100;
+        }).length;
+
+        const csmCompletionRates = csms.map(csm => {
+            const csmCustomers = customers.filter(c => c.assignedCsmId === csm.id);
+            const csmCustomerIds = new Set(csmCustomers.map(c => c.id));
+            
+            let totalAssignments = 0;
+            let completedAssignments = 0;
+
+            activeTasks.forEach(task => {
+                const assignmentsForThisCsm = task.assignedCustomerIds.filter(id => csmCustomerIds.has(id));
+                if(assignmentsForThisCsm.length > 0) {
+                    totalAssignments += assignmentsForThisCsm.length;
+                    const completions = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted && csmCustomerIds.has(tc.customerId)).length;
+                    completedAssignments += completions;
+                }
+            });
+
+            const rate = totalAssignments > 0 ? (completedAssignments / totalAssignments) * 100 : 100;
+            return { name: csm.name, rate: Math.round(rate) };
+        });
+
+        return { overdueTasks, dueSoonTasks, csmCompletionRates };
+    }, [csms, customers, tasks, taskCompletions]);
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <Card>
+                <h3 className="text-slate-500 font-semibold">Overdue Tasks</h3>
+                <p className="text-4xl font-bold text-red-500">{stats.overdueTasks}</p>
+            </Card>
+            <Card>
+                <h3 className="text-slate-500 font-semibold">Tasks Due Soon</h3>
+                <p className="text-4xl font-bold text-yellow-600">{stats.dueSoonTasks}</p>
+            </Card>
+            <Card className="lg:col-span-2">
+                 <h3 className="text-slate-500 font-semibold mb-2">CSM Completion Rates</h3>
+                 <div className="space-y-2">
+                     {stats.csmCompletionRates.map(csm => (
+                         <div key={csm.name}>
+                             <div className="flex justify-between text-sm font-medium text-slate-600 mb-1">
+                                 <span>{csm.name}</span>
+                                 <span>{csm.rate}%</span>
+                             </div>
+                             <div className="bg-slate-200 rounded-full h-2.5">
+                                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${csm.rate}%` }}></div>
+                            </div>
+                         </div>
+                     ))}
+                 </div>
+            </Card>
+        </div>
+    )
+};
+
+
 const ManagerView: React.FC = () => {
-    const { tasks, setTasks, taskCompletions } = useAppContext();
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const { tasks, setTasks, taskCompletions, setTaskCompletions, customers, csms } = useAppContext();
+    const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
+    const [initialTaskData, setInitialTaskData] = useState<Partial<AIGeneratedTaskData> | undefined>(undefined);
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<TaskCategory | 'all'>('all');
@@ -304,12 +459,62 @@ const ManagerView: React.FC = () => {
     
     const handleEditTask = (task: Task) => {
         setEditingTask(task);
-        setIsModalOpen(true);
+        setInitialTaskData(undefined);
+        setIsFormModalOpen(true);
     };
 
     const handleOpenCreateModal = () => {
         setEditingTask(null);
-        setIsModalOpen(true);
+        setInitialTaskData(undefined);
+        setIsFormModalOpen(true);
+    };
+    
+    const handleTaskGeneratedByAI = (data: AIGeneratedTaskData) => {
+        setEditingTask(null);
+        setInitialTaskData(data);
+        setIsFormModalOpen(true);
+    };
+
+    const handleDeleteTask = (taskId: string) => {
+        if (window.confirm('Are you sure you want to permanently delete this task and all its completion data?')) {
+            setTasks(prev => prev.filter(t => t.id !== taskId));
+            setTaskCompletions(prev => prev.filter(tc => tc.taskId !== taskId));
+        }
+    };
+
+    const handleExportTask = (task: Task) => {
+        const assignedCustomers = customers.filter(c => task.assignedCustomerIds.includes(c.id));
+        
+        const csvRows = [
+            ['Customer Name', 'CSM Name', 'Completion Status', 'Notes', 'Response']
+        ];
+
+        for (const customer of assignedCustomers) {
+            const csm = csms.find(c => c.id === customer.assignedCsmId);
+            const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
+            const responseLabel = completion?.selectedOptions
+                ?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label)
+                .join(', ') || '';
+
+            csvRows.push([
+                `"${customer.name}"`,
+                `"${csm?.name || 'Unassigned'}"`,
+                completion?.isCompleted ? 'Completed' : 'Incomplete',
+                `"${completion?.notes || ''}"`,
+                `"${responseLabel}"`
+            ]);
+        }
+        
+        const csvContent = "data:text/csv;charset=utf-8," + csvRows.map(e => e.join(",")).join("\n");
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        const safeTitle = task.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        link.setAttribute("download", `${safeTitle}_export.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const getCategoryColor = (category: TaskCategory) => {
@@ -328,11 +533,18 @@ const ManagerView: React.FC = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-slate-800">Manager Dashboard</h1>
-                <Button onClick={handleOpenCreateModal}>
-                    <PlusIcon /> <span className="ml-2">New Task</span>
-                </Button>
+                <div className="flex gap-2">
+                    <Button onClick={() => setIsAIModalOpen(true)} variant="secondary">
+                        <SparklesIcon /> Generate with AI
+                    </Button>
+                    <Button onClick={handleOpenCreateModal}>
+                        <PlusIcon /> New Task
+                    </Button>
+                </div>
             </div>
             
+            <DashboardStats />
+
              <Card>
                 <div className="flex flex-col md:flex-row gap-4 mb-4">
                     <div className="relative flex-grow">
@@ -366,7 +578,7 @@ const ManagerView: React.FC = () => {
                                              <Tag color={getCategoryColor(task.category)}>{task.category}</Tag>
                                              <h3 className="text-lg font-semibold text-slate-800">{task.title}</h3>
                                         </div>
-                                        <p className="text-sm text-slate-500 mt-1">{task.description}</p>
+                                        <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
                                         <div className="flex items-center gap-4 text-sm mt-2 text-slate-600">
                                             <span className={`font-semibold ${isOverdue(task.dueDate) ? 'text-red-500' : ''}`}>Due: {task.dueDate}</span>
                                             <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignedCustomerIds.length} Customers</span></span>
@@ -379,8 +591,10 @@ const ManagerView: React.FC = () => {
                                             </div>
                                             <p className="text-sm text-slate-600 mt-1">{completionPercent.toFixed(0)}% Complete</p>
                                         </div>
-                                        <Button variant="secondary" onClick={() => handleEditTask(task)} className="px-2 py-1"><PencilIcon/></Button>
+                                        <Button variant="secondary" onClick={() => handleEditTask(task)} className="px-2 py-1" title="Edit Task"><PencilIcon/></Button>
                                         <Button variant="secondary" onClick={() => handleArchiveTask(task.id)} className="px-2 py-1" title={task.isArchived ? "Unarchive" : "Archive"}><ArchiveIcon/></Button>
+                                        <Button variant="secondary" onClick={() => handleExportTask(task)} className="px-2 py-1" title="Export to CSV"><DownloadIcon/></Button>
+                                        <Button variant="danger" onClick={() => handleDeleteTask(task.id)} className="px-2 py-1" title="Delete Task"><TrashIcon/></Button>
                                         <button onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)} className={`p-1 rounded-full hover:bg-slate-100 transition-transform ${expandedTaskId === task.id ? 'rotate-180' : ''}`}>
                                             <ChevronDownIcon />
                                         </button>
@@ -394,7 +608,8 @@ const ManagerView: React.FC = () => {
                 </div>
             </Card>
 
-            <TaskFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} editingTask={editingTask} />
+            <TaskFormModal isOpen={isFormModalOpen} onClose={() => setIsFormModalOpen(false)} editingTask={editingTask} initialData={initialTaskData}/>
+            <AITaskModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} onTaskGenerated={handleTaskGeneratedByAI} />
         </div>
     );
 };
