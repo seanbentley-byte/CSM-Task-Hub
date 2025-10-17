@@ -68,17 +68,24 @@ const SettingsView: React.FC = () => {
     // Handlers for Customer
     const handleCustomerSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!customerName || !assignedCsmId) return;
+        if (!customerName.trim() || !assignedCsmId) return;
 
         if (editingCustomer) {
             setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? { ...c, name: customerName, assignedCsmId } : c));
             setEditingCustomer(null);
         } else {
-            const newCustomer: Customer = { id: `cust_${Date.now()}`, name: customerName, assignedCsmId };
-            setCustomers(prev => [...prev, newCustomer]);
+            const customerNames = customerName.split('\n').filter(name => name.trim() !== '');
+            const newCustomers: Customer[] = customerNames.map((name, index) => ({
+                id: `cust_${Date.now()}_${index}`,
+                name: name.trim(),
+                assignedCsmId
+            }));
+            setCustomers(prev => [...prev, ...newCustomers]);
         }
         setCustomerName('');
-        setAssignedCsmId(csms[0]?.id || '');
+        if (!editingCustomer) {
+            setAssignedCsmId(csms[0]?.id || '');
+        }
     };
     
     const handleEditCustomer = (customer: Customer) => {
@@ -105,25 +112,6 @@ const SettingsView: React.FC = () => {
 
     return (
         <div className="space-y-8">
-             {/* API Key Management */}
-             <Card>
-                <h2 className="text-2xl font-bold text-slate-800 mb-4">API Settings</h2>
-                <div>
-                    <label htmlFor="api-key-settings" className="block text-sm font-medium text-slate-700 mb-1">Google AI API Key</label>
-                    <div className="flex gap-2">
-                        <input
-                            id="api-key-settings"
-                            type="password"
-                            value={tempApiKey}
-                            onChange={e => setTempApiKey(e.target.value)}
-                            placeholder="Enter your API key"
-                            className="flex-grow px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
-                        <Button onClick={handleApiKeySave}>Save</Button>
-                    </div>
-                </div>
-            </Card>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* CSM Management */}
                 <Card>
@@ -156,13 +144,23 @@ const SettingsView: React.FC = () => {
                 <Card>
                     <h2 className="text-2xl font-bold text-slate-800 mb-4">Manage Customers</h2>
                     <form onSubmit={handleCustomerSubmit} className="space-y-4 mb-4">
-                        <input 
-                            type="text" 
-                            value={customerName}
-                            onChange={e => setCustomerName(e.target.value)}
-                            placeholder="Enter customer name"
-                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
+                        {editingCustomer ? (
+                             <input 
+                                type="text" 
+                                value={customerName}
+                                onChange={e => setCustomerName(e.target.value)}
+                                placeholder="Enter customer name"
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            />
+                        ) : (
+                            <textarea 
+                                value={customerName}
+                                onChange={e => setCustomerName(e.target.value)}
+                                placeholder="Enter customer names, one per line"
+                                rows={4}
+                                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            />
+                        )}
                         <select 
                             value={assignedCsmId} 
                             onChange={e => setAssignedCsmId(e.target.value)}
@@ -193,6 +191,24 @@ const SettingsView: React.FC = () => {
                     </ul>
                 </Card>
             </div>
+            {/* API Key Management */}
+             <Card>
+                <h2 className="text-2xl font-bold text-slate-800 mb-4">API Settings</h2>
+                <div>
+                    <label htmlFor="api-key-settings" className="block text-sm font-medium text-slate-700 mb-1">Google AI API Key</label>
+                    <div className="flex gap-2">
+                        <input
+                            id="api-key-settings"
+                            type="password"
+                            value={tempApiKey}
+                            onChange={e => setTempApiKey(e.target.value)}
+                            placeholder="Enter your API key"
+                            className="flex-grow px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        />
+                        <Button onClick={handleApiKeySave}>Save</Button>
+                    </div>
+                </div>
+            </Card>
         </div>
     );
 };
