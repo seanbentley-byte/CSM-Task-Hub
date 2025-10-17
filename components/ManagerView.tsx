@@ -19,14 +19,19 @@ const AITaskModal: React.FC<{
     const [prompt, setPrompt] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const { apiKey } = useAppContext();
 
     const handleGenerate = async () => {
         if (!prompt) return;
+        if (!apiKey) {
+            setError('API Key not found. Please set it in the Settings page.');
+            return;
+        }
         setIsLoading(true);
         setError('');
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: `Parse the following request and generate a task object based on the provided schema. The request is: "${prompt}". The description should be suitable for a customer success manager and support markdown formatting.`,
@@ -54,7 +59,7 @@ const AITaskModal: React.FC<{
 
         } catch (e) {
             console.error(e);
-            setError('Failed to generate task. Please try again or rephrase your prompt.');
+            setError('Failed to generate task. Check your API key or rephrase your prompt.');
         } finally {
             setIsLoading(false);
             setPrompt('');

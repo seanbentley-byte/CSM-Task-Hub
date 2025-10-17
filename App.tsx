@@ -3,10 +3,47 @@ import { AppProvider, useAppContext } from './components/AppContext';
 import ManagerView from './components/ManagerView';
 import CSMView from './components/CSMView';
 import SettingsView from './components/SettingsView';
-import { CogIcon } from './components/ui';
+import { CogIcon, Button, Modal } from './components/ui';
 
 type View = 'dashboard' | 'settings';
 type Role = 'manager' | 'csm';
+
+const ApiKeyModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
+    const { setApiKey } = useAppContext();
+    const [key, setKey] = useState('');
+
+    const handleSave = () => {
+        if (key.trim()) {
+            setApiKey(key.trim());
+            onClose();
+        }
+    };
+    
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Enter Your Google AI API Key">
+            <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                    To use the AI features, please provide your Google AI API key. You can get a key from Google AI Studio. 
+                    Your key is stored locally in your browser and is not shared.
+                </p>
+                <div>
+                    <label htmlFor="api-key-input" className="sr-only">API Key</label>
+                    <input
+                        id="api-key-input"
+                        type="password"
+                        value={key}
+                        onChange={(e) => setKey(e.target.value)}
+                        placeholder="Enter your API key here"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    />
+                </div>
+                <div className="flex justify-end">
+                    <Button onClick={handleSave}>Save Key</Button>
+                </div>
+            </div>
+        </Modal>
+    )
+};
 
 const Header: React.FC<{
   currentRole: Role;
@@ -70,8 +107,15 @@ const Header: React.FC<{
 const AppContent: React.FC = () => {
     const [currentView, setCurrentView] = useState<View>('dashboard');
     const [currentRole, setCurrentRole] = useState<Role>('manager');
-    const { csms } = useAppContext();
+    const { csms, apiKey } = useAppContext();
     const [currentCsmId, setCurrentCsmId] = useState<string>(csms[0]?.id || '');
+    const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+    
+    useEffect(() => {
+        if (!apiKey) {
+            setIsApiKeyModalOpen(true);
+        }
+    }, [apiKey]);
 
     useEffect(() => {
         // If the currently selected CSM gets deleted, default to the first available CSM.
@@ -102,6 +146,7 @@ const AppContent: React.FC = () => {
                     <SettingsView />
                 )}
             </main>
+            <ApiKeyModal isOpen={isApiKeyModalOpen} onClose={() => setIsApiKeyModalOpen(false)} />
         </>
     );
 };

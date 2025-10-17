@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Task, Customer, CSM, TaskCompletion, ActionItem, BugReport, FeatureRequest, MeetingNote } from '../types';
 import { 
     tasks as initialTasks, 
@@ -28,6 +28,8 @@ interface AppContextType {
     setFeatureRequests: React.Dispatch<React.SetStateAction<FeatureRequest[]>>;
     meetingNotes: MeetingNote[];
     setMeetingNotes: React.Dispatch<React.SetStateAction<MeetingNote[]>>;
+    apiKey: string | null;
+    setApiKey: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -43,6 +45,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [bugReports, setBugReports] = useState<BugReport[]>(initialBugReports);
     const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>(initialFeatureRequests);
     const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(initialMeetingNotes);
+    const [apiKey, setApiKey] = useState<string | null>(() => localStorage.getItem('gemini-api-key'));
+    
+    useEffect(() => {
+        if (apiKey) {
+            localStorage.setItem('gemini-api-key', apiKey);
+        } else {
+            localStorage.removeItem('gemini-api-key');
+        }
+    }, [apiKey]);
+
 
     const value = {
         tasks, setTasks,
@@ -52,7 +64,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         actionItems, setActionItems,
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,
-        meetingNotes, setMeetingNotes
+        meetingNotes, setMeetingNotes,
+        apiKey, setApiKey,
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

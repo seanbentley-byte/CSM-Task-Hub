@@ -80,7 +80,8 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
         actionItems, setActionItems,
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,
-        meetingNotes, setMeetingNotes
+        meetingNotes, setMeetingNotes,
+        apiKey
     } = useAppContext();
     
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -126,10 +127,10 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
     };
 
     const handleSummarizeNotes = async () => {
-        if (!currentNotes) return;
+        if (!currentNotes || !apiKey) return;
         setIsSummarizing(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: `Summarize the following meeting notes into key bullet points and identify any action items: \n\n${currentNotes}`,
@@ -137,6 +138,7 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
             setCurrentNotes(prev => `${prev}\n\n**AI Summary:**\n${response.text}`);
         } catch (error) {
             console.error("Failed to summarize notes:", error);
+            alert("Failed to summarize notes. Please check your API key in settings.");
         } finally {
             setIsSummarizing(false);
         }
@@ -373,7 +375,7 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
                  <textarea value={currentNotes} onChange={e => setCurrentNotes(e.target.value)} rows={6} className="w-full p-2 border rounded-md" placeholder="Start typing notes for your meeting..."></textarea>
                  <div className="flex justify-end gap-2 mt-2">
                     <Button variant="secondary" onClick={handleSaveNotes}>Save Notes</Button>
-                    <Button onClick={handleSummarizeNotes} disabled={isSummarizing}>
+                    <Button onClick={handleSummarizeNotes} disabled={isSummarizing || !apiKey}>
                         <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
                     </Button>
                  </div>
