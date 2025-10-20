@@ -55,7 +55,8 @@ export interface TaskCompletion {
 
 export interface ActionItem {
     id: string;
-    customerId: string;
+    customerId?: string;
+    csmId?: string;
     text: string;
     isCompleted: boolean;
     completedAt?: number;
@@ -64,7 +65,8 @@ export interface ActionItem {
 
 export interface BugReport {
     id: string;
-    customerId: string;
+    customerId?: string;
+    csmId?: string;
     name: string;
     ticketLink: string;
     isCompleted: boolean;
@@ -74,7 +76,8 @@ export interface BugReport {
 
 export interface FeatureRequest {
     id: string;
-    customerId: string;
+    customerId?: string;
+    csmId?: string;
     text: string;
     isCompleted: boolean;
     completedAt?: number;
@@ -82,6 +85,7 @@ export interface FeatureRequest {
 }
 
 export interface MeetingNote {
-    customerId: string;
+    customerId?: string;
+    csmId?: string;
     text: string;
 }

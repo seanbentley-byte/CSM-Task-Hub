@@ -73,102 +73,24 @@ const TaskCompletionForm: React.FC<{
     )
 }
 
-const CSMTasksAgenda: React.FC<{ csmId: string }> = ({ csmId }) => {
-    const { tasks, taskCompletions, setTaskCompletions } = useAppContext();
-    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-
-    const csmTasks = useMemo(() => 
-        tasks.filter(t => 
-            !t.isArchived && 
-            t.assignmentType === 'csm' && 
-            t.assignedCsmIds?.includes(csmId)
-        ).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
-    [tasks, csmId]);
-
-    const handleSaveCompletion = (taskId: string, completionData: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions'>) => {
-        setTaskCompletions(prev => {
-            const existingIndex = prev.findIndex(tc => tc.taskId === taskId && tc.csmId === csmId);
-            const newCompletion: TaskCompletion = { ...completionData, taskId, csmId, completedAt: Date.now() };
-            if (existingIndex > -1) {
-                const updated = [...prev];
-                updated[existingIndex] = newCompletion;
-                return updated;
-            }
-            return [...prev, newCompletion];
-        });
-        setEditingTaskId(null);
-    };
-
-     return (
-        <div className="flex-grow space-y-4 pb-8 max-h-full overflow-y-auto">
-            <Card>
-                <h2 className="text-xl font-bold text-slate-800 mb-4">My Assigned Tasks</h2>
-                <div className="space-y-4">
-                    {csmTasks.map(task => {
-                        const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.csmId === csmId);
-                        const isEditing = editingTaskId === task.id;
-                        const isComplete = completion?.isCompleted || false;
-
-                        return (
-                             <div key={task.id} className={`p-3 rounded-md border ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-start flex-grow">
-                                        {isComplete ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
-                                        <div>
-                                            <p className="font-semibold text-slate-800">{task.title}</p>
-                                            <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
-                                            <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {task.dueDate}</p>
-                                            {isComplete && completion && (
-                                                <div className="text-sm mt-1 text-slate-600 italic space-y-1">
-                                                    {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: "{completion.notes}"</p>}
-                                                    {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
-                                                        <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
-                                                    }
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {!isEditing && (
-                                        <Button variant="secondary" onClick={() => setEditingTaskId(task.id)}>
-                                            {completion ? 'Edit' : 'Complete'}
-                                        </Button>
-                                    )}
-                                </div>
-                                {isEditing && (
-                                    <TaskCompletionForm 
-                                        task={task} 
-                                        csmId={csmId} 
-                                        existingCompletion={completion} 
-                                        onSave={(data) => handleSaveCompletion(task.id, data)}
-                                        onCancel={() => setEditingTaskId(null)}
-                                    />
-                                )}
-                            </div>
-                        );
-                    })}
-                    {csmTasks.length === 0 && <p className="text-slate-500 text-center py-4">You have no tasks assigned directly to you.</p>}
-                </div>
-            </Card>
-        </div>
-    );
-};
-
-const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
+const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = ({ entityId, entityType }) => {
     const { 
-        customers, tasks, taskCompletions, setTaskCompletions,
+        customers, csms, tasks, taskCompletions, setTaskCompletions,
         actionItems, setActionItems,
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,
         meetingNotes, setMeetingNotes,
         apiKey
     } = useAppContext();
+
+    const isCsmView = entityType === 'csm';
     
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [showOlderCompleted, setShowOlderCompleted] = useState(false);
     const [showCompletedBugs, setShowCompletedBugs] = useState(false);
     const [showCompletedFeatures, setShowCompletedFeatures] = useState(false);
     
-    // Meeting Notes
+    // Notes
     const [currentNotes, setCurrentNotes] = useState('');
     const [isSummarizing, setIsSummarizing] = useState(false);
     
@@ -184,27 +106,32 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
     const [newFeatureRequest, setNewFeatureRequest] = useState('');
     
     useEffect(() => {
-        const note = meetingNotes.find(n => n.customerId === customerId);
+        const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
         setCurrentNotes(note?.text || '');
-        setEditingTaskId(null); // Reset editing state when customer changes
-    }, [customerId, meetingNotes]);
+        setEditingTaskId(null); // Reset editing state when entity changes
+    }, [entityId, meetingNotes, isCsmView]);
     
-    const customer = customers.find(c => c.id === customerId);
+    const entity = isCsmView ? csms.find(c => c.id === entityId) : customers.find(c => c.id === entityId);
     
-    // Filter all data for the selected customer
-    const customerActionItems = useMemo(() => actionItems.filter(ai => ai.customerId === customerId).sort((a, b) => b.createdAt - a.createdAt), [actionItems, customerId]);
-    const customerBugs = useMemo(() => bugReports.filter(b => b.customerId === customerId).sort((a, b) => b.createdAt - a.createdAt), [bugReports, customerId]);
-    const customerFeatures = useMemo(() => featureRequests.filter(fr => fr.customerId === customerId).sort((a, b) => b.createdAt - a.createdAt), [featureRequests, customerId]);
-    const customerTasks = useMemo(() => tasks.filter(t => !t.isArchived && t.assignmentType === 'customer' && t.assignedCustomerIds.includes(customerId)).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, customerId]);
+    // Filter all data for the selected entity
+    const entityActionItems = useMemo(() => actionItems.filter(ai => isCsmView ? ai.csmId === entityId : ai.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [actionItems, entityId, isCsmView]);
+    const entityBugs = useMemo(() => bugReports.filter(b => isCsmView ? b.csmId === entityId : b.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [bugReports, entityId, isCsmView]);
+    const entityFeatures = useMemo(() => featureRequests.filter(fr => isCsmView ? fr.csmId === entityId : fr.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [featureRequests, entityId, isCsmView]);
+    const managerTasks = useMemo(() => tasks.filter(t => {
+        if (isCsmView) {
+            return !t.isArchived && t.assignmentType === 'csm' && t.assignedCsmIds?.includes(entityId)
+        }
+        return !t.isArchived && t.assignmentType === 'customer' && t.assignedCustomerIds.includes(entityId)
+    }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, entityId, isCsmView]);
 
-    // Meeting Notes Handlers
+    // Notes Handlers
     const handleSaveNotes = () => {
         setMeetingNotes(prev => {
-            const existing = prev.find(n => n.customerId === customerId);
+            const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
             if (existing) {
-                return prev.map(n => n.customerId === customerId ? { ...n, text: currentNotes } : n);
+                return prev.map(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId) ? { ...n, text: currentNotes } : n);
             }
-            return [...prev, { customerId, text: currentNotes }];
+            return [...prev, { customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, text: currentNotes }];
         });
     };
 
@@ -215,7 +142,7 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
             const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: `Summarize the following meeting notes into key bullet points and identify any action items: \n\n${currentNotes}`,
+                contents: `Summarize the following notes into key bullet points and identify any action items: \n\n${currentNotes}`,
             });
             setCurrentNotes(prev => `${prev}\n\n**AI Summary:**\n${response.text}`);
         } catch (error) {
@@ -232,7 +159,8 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
         if(!newActionItem.trim()) return;
         const newItem: ActionItem = {
             id: `ai_${Date.now()}`,
-            customerId,
+            customerId: isCsmView ? undefined : entityId,
+            csmId: isCsmView ? entityId : undefined,
             text: newActionItem.trim(),
             isCompleted: false,
             createdAt: Date.now()
@@ -257,7 +185,8 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
         if(!newBugName.trim()) return;
         const newBug: BugReport = {
             id: `bug_${Date.now()}`,
-            customerId,
+            customerId: isCsmView ? undefined : entityId,
+            csmId: isCsmView ? entityId : undefined,
             name: newBugName.trim(),
             ticketLink: newBugLink.trim(),
             isCompleted: false,
@@ -278,7 +207,8 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
         if(!newFeatureRequest.trim()) return;
         const newRequest: FeatureRequest = {
             id: `fr_${Date.now()}`,
-            customerId,
+            customerId: isCsmView ? undefined : entityId,
+            csmId: isCsmView ? entityId : undefined,
             text: newFeatureRequest.trim(),
             isCompleted: false,
             createdAt: Date.now()
@@ -295,8 +225,8 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
     // Task Completion Handlers
     const handleSaveCompletion = (taskId: string, completionData: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions'>) => {
         setTaskCompletions(prev => {
-            const existingIndex = prev.findIndex(tc => tc.taskId === taskId && tc.customerId === customerId);
-            const newCompletion: TaskCompletion = { ...completionData, taskId, customerId, completedAt: Date.now() };
+            const existingIndex = prev.findIndex(tc => tc.taskId === taskId && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
+            const newCompletion: TaskCompletion = { ...completionData, taskId, customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, completedAt: Date.now() };
             if (existingIndex > -1) {
                 const updated = [...prev];
                 updated[existingIndex] = newCompletion;
@@ -308,18 +238,17 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
     };
 
     // Rendering Logic
-    const incompleteActionItems = customerActionItems.filter(ai => !ai.isCompleted);
-    const completedActionItems = customerActionItems.filter(ai => ai.isCompleted);
+    const incompleteActionItems = entityActionItems.filter(ai => !ai.isCompleted);
+    const completedActionItems = entityActionItems.filter(ai => ai.isCompleted);
     const visibleCompleted = showOlderCompleted ? completedActionItems : completedActionItems.slice(0, 3);
 
-    const openBugs = customerBugs.filter(b => !b.isCompleted);
-    const completedBugs = customerBugs.filter(b => b.isCompleted);
+    const openBugs = entityBugs.filter(b => !b.isCompleted);
+    const completedBugs = entityBugs.filter(b => b.isCompleted);
 
-    const openFeatures = customerFeatures.filter(f => !f.isCompleted);
-    const completedFeatures = customerFeatures.filter(f => f.isCompleted);
+    const openFeatures = entityFeatures.filter(f => !f.isCompleted);
+    const completedFeatures = entityFeatures.filter(f => f.isCompleted);
     
-
-    if (!customer) return <div className="flex-grow flex items-center justify-center text-slate-500">Select a customer to see their agenda.</div>;
+    if (!entity) return <div className="flex-grow flex items-center justify-center text-slate-500">Select an item to see the agenda.</div>;
 
     return (
         <div className="flex-grow space-y-4 pb-8 max-h-full overflow-y-auto">
@@ -452,10 +381,10 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
             </details>
 
             <Card>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Additional Items</h2>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Manager Assigned Tasks</h2>
                 <div className="space-y-4">
-                    {customerTasks.map(task => {
-                        const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customerId);
+                    {managerTasks.map(task => {
+                        const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
                         const isEditing = editingTaskId === task.id;
                         const isComplete = completion?.isCompleted || false;
 
@@ -486,7 +415,8 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
                                 {isEditing && (
                                     <TaskCompletionForm 
                                         task={task} 
-                                        customerId={customerId} 
+                                        customerId={isCsmView ? undefined : entityId}
+                                        csmId={isCsmView ? entityId : undefined}
                                         existingCompletion={completion} 
                                         onSave={(data) => handleSaveCompletion(task.id, data)}
                                         onCancel={() => setEditingTaskId(null)}
@@ -495,13 +425,13 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
                             </div>
                         );
                     })}
-                    {customerTasks.length === 0 && <p className="text-slate-500 text-center py-4">No additional items from manager.</p>}
+                    {managerTasks.length === 0 && <p className="text-slate-500 text-center py-4">No tasks assigned by manager.</p>}
                 </div>
             </Card>
 
             <Card>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Meeting Notes</h2>
-                 <textarea value={currentNotes} onChange={e => setCurrentNotes(e.target.value)} rows={6} className="w-full p-2 border rounded-md" placeholder="Start typing notes for your meeting..."></textarea>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">{isCsmView ? 'Personal Notes' : 'Meeting Notes'}</h2>
+                 <textarea value={currentNotes} onChange={e => setCurrentNotes(e.target.value)} rows={6} className="w-full p-2 border rounded-md" placeholder="Start typing notes..."></textarea>
                  <div className="flex justify-end gap-2 mt-2">
                     <Button variant="secondary" onClick={handleSaveNotes}>Save Notes</Button>
                     <Button onClick={handleSummarizeNotes} disabled={isSummarizing || !apiKey}>
@@ -516,7 +446,7 @@ const CustomerAgenda: React.FC<{ customerId: string }> = ({ customerId }) => {
 
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const { customers, csms, tasks, taskCompletions } = useAppContext();
-    const [selectedViewId, setSelectedViewId] = useState<string | null>('my-tasks');
+    const [selectedViewId, setSelectedViewId] = useState<string>(csmId);
     const [searchQuery, setSearchQuery] = useState('');
     const [isCustomerListCollapsed, setIsCustomerListCollapsed] = useState(false);
 
@@ -558,13 +488,13 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     , [customers, csmId, searchQuery]);
 
     useEffect(() => {
-        if (selectedViewId !== 'my-tasks' && csmCustomers.length > 0 && !csmCustomers.find(c => c.id === selectedViewId)) {
-            setSelectedViewId(csmCustomers[0].id);
-        } else if (selectedViewId !== 'my-tasks' && csmCustomers.length === 0) {
-            setSelectedViewId(null);
-        } else if (csmCustomers.length > 0 && selectedViewId === null) {
-            setSelectedViewId('my-tasks');
-        }
+        // When switching CSMs, reset the view to the new CSM's personal agenda
+        setSelectedViewId(csmId);
+    }, [csmId]);
+
+    useEffect(() => {
+        // If the selected customer is filtered out, don't change the view automatically.
+        // Let the user decide what to select next. If the list becomes empty, they see a message.
     }, [csmCustomers, selectedViewId]);
     
     const selectedCustomer = useMemo(() => customers.find(c => c.id === selectedViewId), [customers, selectedViewId]);
@@ -574,7 +504,7 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     }
 
     const getTitle = () => {
-        if (selectedViewId === 'my-tasks') return 'My Tasks';
+        if (selectedViewId === csmId) return `My Agenda: ${csm.name}`;
         if (selectedCustomer) return `${selectedCustomer.name} Agenda`;
         return `CSM Agenda: ${csm.name}`;
     }
@@ -594,13 +524,13 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon/></span>
                                 <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search customers..." className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md" />
                             </div>
-                            <h2 className="text-lg font-semibold text-slate-700 mb-2">Agenda View</h2>
-                            <div className="border-b mb-2 pb-2">
+                            <h2 className="text-lg font-semibold text-slate-700 mb-2">My Tasks</h2>
+                             <div className="border-b mb-2 pb-2">
                                 <button
-                                    onClick={() => setSelectedViewId('my-tasks')}
-                                    className={`w-full text-left p-3 rounded-md transition-colors flex justify-between items-center ${selectedViewId === 'my-tasks' ? 'bg-indigo-100 text-indigo-800 font-semibold' : 'hover:bg-slate-100'}`}
+                                    onClick={() => setSelectedViewId(csmId)}
+                                    className={`w-full text-left p-3 rounded-md transition-colors flex justify-between items-center ${selectedViewId === csmId ? 'bg-indigo-100 text-indigo-800 font-semibold' : 'hover:bg-slate-100'}`}
                                 >
-                                    <span>My Tasks</span>
+                                    <span>{csm.name}</span>
                                     {myTasksIncompleteCount > 0 && (
                                         <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                                             {myTasksIncompleteCount}
@@ -644,10 +574,11 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
                     >
                         {isCustomerListCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                     </button>
-                    {selectedViewId === 'my-tasks' ? (
-                        <CSMTasksAgenda csmId={csmId} />
-                    ) : selectedViewId ? (
-                        <CustomerAgenda customerId={selectedViewId} />
+                    {selectedViewId ? (
+                        <Agenda 
+                            entityId={selectedViewId} 
+                            entityType={selectedViewId === csmId ? 'csm' : 'customer'} 
+                        />
                     ) : (
                         <div className="h-full flex items-center justify-center bg-white rounded-lg shadow-sm">
                             <p className="text-slate-500">
