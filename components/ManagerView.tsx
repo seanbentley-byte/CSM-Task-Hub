@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Task, CSMInputType, TaskCategory, MultiSelectOption, Customer, CSM } from '../types';
+import { Task, CSMInputType, TaskCategory, MultiSelectOption, Customer, User } from '../types';
 import { useAppContext } from './AppContext';
 import { Card, Button, Modal, Tag, PlusIcon, ArchiveIcon, ChevronDownIcon, CheckCircleIcon, UsersIcon, PencilIcon, SearchIcon, TrashIcon, DownloadIcon, MarkdownRenderer, SparklesIcon } from './ui';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -97,7 +97,8 @@ const TaskFormModal: React.FC<{
     editingTask: Task | null;
     initialData?: Partial<AIGeneratedTaskData>;
 }> = ({ isOpen, onClose, editingTask, initialData }) => {
-    const { customers, csms, setTasks } = useAppContext();
+    const { customers, users, setTasks } = useAppContext();
+    const csms = users.filter(u => u.role === 'csm');
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [dueDate, setDueDate] = useState('');
@@ -308,7 +309,8 @@ const TaskFormModal: React.FC<{
 };
 
 const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
-    const { customers, csms, taskCompletions } = useAppContext();
+    const { customers, users, taskCompletions } = useAppContext();
+    const csms = users.filter(u => u.role === 'csm');
     const [selectedOptionFilter, setSelectedOptionFilter] = useState<string>('all');
     const [completionStatusFilter, setCompletionStatusFilter] = useState<'all' | 'completed' | 'incomplete'>('all');
 
@@ -417,7 +419,7 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
             <ul className="space-y-3">
                 {filteredCustomers.map(customer => {
                     const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
-                    const csm = csms.find(c => c.id === customer.assignedCsmId);
+                    const csm = users.find(c => c.id === customer.assignedCsmId);
                     
                     return (
                         <li key={customer.id} className="flex items-start justify-between p-3 bg-white rounded-md border border-slate-200">
@@ -447,7 +449,8 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
 };
 
 const DashboardStats: React.FC = () => {
-    const { csms, customers, tasks, taskCompletions } = useAppContext();
+    const { users, customers, tasks, taskCompletions } = useAppContext();
+    const csms = users.filter(u => u.role === 'csm');
 
     const stats = useMemo(() => {
         const activeTasks = tasks.filter(t => !t.isArchived);
@@ -533,7 +536,8 @@ const DashboardStats: React.FC = () => {
 
 
 const ManagerView: React.FC = () => {
-    const { tasks, setTasks, taskCompletions, setTaskCompletions, customers, csms } = useAppContext();
+    const { tasks, setTasks, taskCompletions, setTaskCompletions, customers, users } = useAppContext();
+    const csms = users.filter(u => u.role === 'csm');
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);

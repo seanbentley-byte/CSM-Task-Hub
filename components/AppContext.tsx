@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { Task, Customer, CSM, TaskCompletion, ActionItem, BugReport, FeatureRequest, MeetingNote } from '../types';
+import { Task, Customer, User, TaskCompletion, ActionItem, BugReport, FeatureRequest, MeetingNote, AuthenticatedUser } from '../types';
 import { 
     tasks as initialTasks, 
     customers as initialCustomers, 
-    csms as initialCsms, 
+    users as initialUsers, 
     taskCompletions as initialTaskCompletions,
     initialActionItems,
     initialBugReports,
@@ -16,8 +16,8 @@ interface AppContextType {
     setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
     customers: Customer[];
     setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
-    csms: CSM[];
-    setCsms: React.Dispatch<React.SetStateAction<CSM[]>>;
+    users: User[];
+    setUsers: React.Dispatch<React.SetStateAction<User[]>>;
     taskCompletions: TaskCompletion[];
     setTaskCompletions: React.Dispatch<React.SetStateAction<TaskCompletion[]>>;
     actionItems: ActionItem[];
@@ -30,6 +30,8 @@ interface AppContextType {
     setMeetingNotes: React.Dispatch<React.SetStateAction<MeetingNote[]>>;
     apiKey: string | null;
     setApiKey: React.Dispatch<React.SetStateAction<string | null>>;
+    currentUser: AuthenticatedUser | null;
+    setCurrentUser: React.Dispatch<React.SetStateAction<AuthenticatedUser | null>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -39,13 +41,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // It's a placeholder for a proper backend connection where data would be fetched and persisted.
     const [tasks, setTasks] = useState<Task[]>(initialTasks);
     const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-    const [csms, setCsms] = useState<CSM[]>(initialCsms);
+    const [users, setUsers] = useState<User[]>(initialUsers);
     const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>(initialTaskCompletions);
     const [actionItems, setActionItems] = useState<ActionItem[]>(initialActionItems);
     const [bugReports, setBugReports] = useState<BugReport[]>(initialBugReports);
     const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>(initialFeatureRequests);
     const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(initialMeetingNotes);
     const [apiKey, setApiKey] = useState<string | null>(() => localStorage.getItem('gemini-api-key'));
+    const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => {
+        const storedUser = sessionStorage.getItem('currentUser');
+        return storedUser ? JSON.parse(storedUser) : null;
+    });
     
     useEffect(() => {
         if (apiKey) {
@@ -55,17 +61,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [apiKey]);
 
+    useEffect(() => {
+        if (currentUser) {
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        } else {
+            sessionStorage.removeItem('currentUser');
+        }
+    }, [currentUser]);
+
 
     const value = {
         tasks, setTasks,
         customers, setCustomers,
-        csms, setCsms,
+        users, setUsers,
         taskCompletions, setTaskCompletions,
         actionItems, setActionItems,
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,
         meetingNotes, setMeetingNotes,
         apiKey, setApiKey,
+        currentUser, setCurrentUser,
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

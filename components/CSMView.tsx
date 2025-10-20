@@ -75,7 +75,7 @@ const TaskCompletionForm: React.FC<{
 
 const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = ({ entityId, entityType }) => {
     const { 
-        customers, csms, tasks, taskCompletions, setTaskCompletions,
+        customers, users, tasks, taskCompletions, setTaskCompletions,
         actionItems, setActionItems,
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,
@@ -111,7 +111,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
         setEditingTaskId(null); // Reset editing state when entity changes
     }, [entityId, meetingNotes, isCsmView]);
     
-    const entity = isCsmView ? csms.find(c => c.id === entityId) : customers.find(c => c.id === entityId);
+    const entity = isCsmView ? users.find(c => c.id === entityId) : customers.find(c => c.id === entityId);
     
     // Filter all data for the selected entity
     const entityActionItems = useMemo(() => actionItems.filter(ai => isCsmView ? ai.csmId === entityId : ai.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [actionItems, entityId, isCsmView]);
@@ -445,12 +445,12 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
 
 
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
-    const { customers, csms, tasks, taskCompletions } = useAppContext();
+    const { customers, users, tasks, taskCompletions } = useAppContext();
     const [selectedViewId, setSelectedViewId] = useState<string>(csmId);
     const [searchQuery, setSearchQuery] = useState('');
     const [isCustomerListCollapsed, setIsCustomerListCollapsed] = useState(false);
 
-    const csm = csms.find(c => c.id === csmId);
+    const csm = users.find(c => c.id === csmId);
 
     const incompleteTaskCounts = useMemo(() => {
         const counts = new Map<string, number>();

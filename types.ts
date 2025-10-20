@@ -12,6 +12,21 @@ export enum CSMInputType {
     MultiSelect = 'Multi-Select',
 }
 
+export interface User {
+    id: string;
+    name: string;
+    email: string;
+    password?: string;
+    role: 'manager' | 'csm';
+}
+
+export interface AuthenticatedUser {
+    id: string;
+    name: string;
+    email: string;
+    role: 'manager' | 'csm';
+}
+
 export interface MultiSelectOption {
     id: string;
     label: string;
@@ -36,11 +51,6 @@ export interface Customer {
     id: string;
     name: string;
     assignedCsmId: string;
-}
-
-export interface CSM {
-    id: string;
-    name: string;
 }
 
 export interface TaskCompletion {

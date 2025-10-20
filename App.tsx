@@ -3,10 +3,8 @@ import { AppProvider, useAppContext } from './components/AppContext';
 import ManagerView from './components/ManagerView';
 import CSMView from './components/CSMView';
 import SettingsView from './components/SettingsView';
-import { CogIcon, Button, Modal } from './components/ui';
-
-type View = 'dashboard' | 'settings';
-type Role = 'manager' | 'csm';
+import { CogIcon, Button, Modal, Card } from './components/ui';
+import { AuthenticatedUser } from './types';
 
 const ApiKeyModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
     const { setApiKey } = useAppContext();
@@ -45,21 +43,92 @@ const ApiKeyModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOp
     )
 };
 
+const Login: React.FC = () => {
+    const { setCurrentUser, users } = useAppContext();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+
+    const handleLogin = (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+
+        const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+        
+        if (foundUser) {
+            const { password, ...userToStore } = foundUser;
+            setCurrentUser(userToStore);
+            return;
+        }
+
+        setError('Invalid email or password.');
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+            <div className="max-w-md w-full">
+                <h1 className="text-3xl font-bold text-indigo-600 text-center mb-6">CSM Task Hub</h1>
+                <Card>
+                    <form onSubmit={handleLogin} className="space-y-6">
+                        <div>
+                            <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email</label>
+                            <input
+                                id="email"
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                                className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            />
+                        </div>
+                         <div>
+                            <label htmlFor="password-login" className="block text-sm font-medium text-slate-700">Password</label>
+                            <input
+                                id="password-login"
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                                className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            />
+                        </div>
+                        {error && <p className="text-red-500 text-sm">{error}</p>}
+                        <Button type="submit" className="w-full">Login</Button>
+                        <div className="text-sm text-slate-500 bg-slate-100 p-3 rounded-md">
+                            <p><strong>Example Logins:</strong></p>
+                            <ul className="list-disc list-inside">
+                                <li>manager@example.com / password</li>
+                                <li>alice@example.com / password123</li>
+                            </ul>
+                        </div>
+                    </form>
+                </Card>
+            </div>
+        </div>
+    );
+};
+
+
 const Header: React.FC<{
-  currentRole: Role;
-  setCurrentRole: (role: Role) => void;
-  currentCsmId: string;
-  setCurrentCsmId: (id: string) => void;
-  currentView: View;
-  setCurrentView: (view: View) => void;
-}> = ({ currentRole, setCurrentRole, currentCsmId, setCurrentCsmId, currentView, setCurrentView }) => {
-    const { csms } = useAppContext();
+  onLogout: () => void;
+  currentUser: AuthenticatedUser;
+  currentRole?: 'manager' | 'csm';
+  setCurrentRole?: (role: 'manager' | 'csm') => void;
+  currentCsmId?: string;
+  setCurrentCsmId?: (id: string) => void;
+  currentView: 'dashboard' | 'settings';
+  setCurrentView: (view: 'dashboard' | 'settings') => void;
+}> = ({ onLogout, currentUser, currentRole, setCurrentRole, currentCsmId, setCurrentCsmId, currentView, setCurrentView }) => {
+    const { users } = useAppContext();
+    const csms = users.filter(u => u.role === 'csm');
+
     return (
         <header className="bg-white shadow-sm mb-8">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-indigo-600">CSM Task Hub</h1>
                 <div className="flex items-center gap-4">
-                    {currentView === 'dashboard' && (
+                    <span className="text-sm text-slate-600 hidden sm:block">Welcome, <span className="font-semibold">{currentUser.name}</span></span>
+                    {currentUser.role === 'manager' && currentView === 'dashboard' && setCurrentRole && (
                         <>
                             <div className="flex items-center rounded-md border border-slate-300 p-0.5 bg-slate-100">
                                 <button 
@@ -75,7 +144,7 @@ const Header: React.FC<{
                                     CSM
                                 </button>
                             </div>
-                            {currentRole === 'csm' && (
+                            {currentRole === 'csm' && setCurrentCsmId && (
                                 <select 
                                     value={currentCsmId} 
                                     onChange={e => setCurrentCsmId(e.target.value)}
@@ -90,13 +159,16 @@ const Header: React.FC<{
                             )}
                         </>
                     )}
-                    <button 
-                        onClick={() => setCurrentView(currentView === 'dashboard' ? 'settings' : 'dashboard')}
-                        className="p-2 rounded-full hover:bg-slate-100 text-slate-600 flex items-center gap-2"
-                        aria-label={currentView === 'dashboard' ? "Go to settings" : "Back to dashboard"}
-                    >
-                        {currentView === 'dashboard' ? <CogIcon /> : <span className="font-semibold text-sm">&larr; Back to Dashboard</span>}
-                    </button>
+                    {currentUser.role === 'manager' && (
+                         <button 
+                            onClick={() => setCurrentView(currentView === 'dashboard' ? 'settings' : 'dashboard')}
+                            className="p-2 rounded-full hover:bg-slate-100 text-slate-600 flex items-center gap-2"
+                            aria-label={currentView === 'dashboard' ? "Go to settings" : "Back to dashboard"}
+                        >
+                            {currentView === 'dashboard' ? <CogIcon /> : <span className="font-semibold text-sm">&larr; Back to Dashboard</span>}
+                        </button>
+                    )}
+                     <Button variant="secondary" onClick={onLogout}>Logout</Button>
                 </div>
             </div>
         </header>
@@ -105,30 +177,66 @@ const Header: React.FC<{
 
 
 const AppContent: React.FC = () => {
-    const [currentView, setCurrentView] = useState<View>('dashboard');
-    const [currentRole, setCurrentRole] = useState<Role>('manager');
-    const { csms, apiKey } = useAppContext();
+    const { currentUser, setCurrentUser, users, apiKey } = useAppContext();
+
+    // State for manager view
+    const [currentView, setCurrentView] = useState<'dashboard' | 'settings'>('dashboard');
+    const [currentRole, setCurrentRole] = useState<'manager' | 'csm'>('manager');
+
+    const csms = users.filter(u => u.role === 'csm');
     const [currentCsmId, setCurrentCsmId] = useState<string>(csms[0]?.id || '');
+    
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     
     useEffect(() => {
-        if (!apiKey) {
+        if (currentUser && !apiKey) {
             setIsApiKeyModalOpen(true);
         }
-    }, [apiKey]);
+    }, [currentUser, apiKey]);
 
     useEffect(() => {
-        // If the currently selected CSM gets deleted, default to the first available CSM.
         if (csms.length > 0 && !csms.find(c => c.id === currentCsmId)) {
             setCurrentCsmId(csms[0].id);
-        } else if (csms.length === 0) {
+        } else if (csms.length === 0 && currentCsmId !== '') {
             setCurrentCsmId('');
         }
     }, [csms, currentCsmId]);
 
+    const handleLogout = () => {
+        setCurrentUser(null);
+    };
+
+    if (!currentUser) {
+        return <Login />;
+    }
+
+    // CSM-specific view
+    if (currentUser.role === 'csm') {
+        return (
+            <>
+                <header className="bg-white shadow-sm mb-8">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                        <h1 className="text-2xl font-bold text-indigo-600">CSM Task Hub</h1>
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm text-slate-600">Welcome, <span className="font-semibold">{currentUser.name}</span></span>
+                            <Button variant="secondary" onClick={handleLogout}>Logout</Button>
+                        </div>
+                    </div>
+                </header>
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+                    {users.length > 0 ? <CSMView csmId={currentUser.id} /> : <p>Loading...</p>}
+                </main>
+                <ApiKeyModal isOpen={isApiKeyModalOpen} onClose={() => setIsApiKeyModalOpen(false)} />
+            </>
+        );
+    }
+
+    // Manager view
     return (
         <>
             <Header 
+                currentUser={currentUser}
+                onLogout={handleLogout}
                 currentRole={currentRole} 
                 setCurrentRole={setCurrentRole}
                 currentCsmId={currentCsmId}
@@ -140,7 +248,7 @@ const AppContent: React.FC = () => {
                 {currentView === 'dashboard' ? (
                      <>
                         {currentRole === 'manager' && <ManagerView />}
-                        {currentRole === 'csm' && csms.length > 0 && <CSMView csmId={currentCsmId} />}
+                        {currentRole === 'csm' && csms.length > 0 && currentCsmId && <CSMView csmId={currentCsmId} />}
                      </>
                 ) : (
                     <SettingsView />

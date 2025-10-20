@@ -1,9 +1,10 @@
-import { CSM, Customer, Task, TaskCategory, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest, MeetingNote } from './types';
+import { User, Customer, Task, TaskCategory, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest, MeetingNote } from './types';
 
-export const csms: CSM[] = [
-    { id: 'csm_1', name: 'Alice' },
-    { id: 'csm_2', name: 'Bob' },
-    { id: 'csm_3', name: 'Charlie' },
+export const users: User[] = [
+    { id: 'manager_1', name: 'Manager', email: 'manager@example.com', password: 'password', role: 'manager' },
+    { id: 'csm_1', name: 'Alice', email: 'alice@example.com', password: 'password123', role: 'csm' },
+    { id: 'csm_2', name: 'Bob', email: 'bob@example.com', password: 'password123', role: 'csm' },
+    { id: 'csm_3', name: 'Charlie', email: 'charlie@example.com', password: 'password123', role: 'csm' },
 ];
 
 export const customers: Customer[] = [
