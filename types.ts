@@ -24,7 +24,9 @@ export interface Task {
     dueDate: string;
     category: TaskCategory;
     csmInputTypes: CSMInputType[];
+    assignmentType: 'customer' | 'csm';
     assignedCustomerIds: string[];
+    assignedCsmIds?: string[];
     multiSelectOptions?: MultiSelectOption[];
     isArchived: boolean;
     createdAt: number;
@@ -43,7 +45,8 @@ export interface CSM {
 
 export interface TaskCompletion {
     taskId: string;
-    customerId: string;
+    customerId?: string;
+    csmId?: string;
     isCompleted: boolean;
     notes?: string;
     selectedOptions?: string[];

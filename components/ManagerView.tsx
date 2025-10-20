@@ -97,15 +97,21 @@ const TaskFormModal: React.FC<{
     editingTask: Task | null;
     initialData?: Partial<AIGeneratedTaskData>;
 }> = ({ isOpen, onClose, editingTask, initialData }) => {
-    const { customers, setTasks } = useAppContext();
+    const { customers, csms, setTasks } = useAppContext();
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [dueDate, setDueDate] = useState('');
     const [category, setCategory] = useState<TaskCategory>(TaskCategory.Other);
     const [csmInputTypes, setCsmInputTypes] = useState<CSMInputType[]>([]);
     const [multiSelectOptionsStr, setMultiSelectOptionsStr] = useState('');
+    
+    const [assignmentType, setAssignmentType] = useState<'customer' | 'csm'>('customer');
+
     const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
     const [assignToAll, setAssignToAll] = useState(false);
+
+    const [selectedCsmIds, setSelectedCsmIds] = useState<string[]>([]);
+    const [assignToAllCsms, setAssignToAllCsms] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -116,11 +122,16 @@ const TaskFormModal: React.FC<{
             setCategory(data?.category || TaskCategory.Other);
             setCsmInputTypes(data?.csmInputTypes || [CSMInputType.Checkbox]);
             setMultiSelectOptionsStr(editingTask?.multiSelectOptions?.map(o => o.label).join(', ') || '');
+            
+            setAssignmentType(editingTask?.assignmentType || 'customer');
+            
             setSelectedCustomerIds(editingTask?.assignedCustomerIds || []);
             setAssignToAll(editingTask?.assignedCustomerIds.length === customers.length);
 
+            setSelectedCsmIds(editingTask?.assignedCsmIds || []);
+            setAssignToAllCsms(!!editingTask?.assignedCsmIds && editingTask.assignedCsmIds.length === csms.length);
         }
-    }, [editingTask, initialData, isOpen, customers]);
+    }, [editingTask, initialData, isOpen, customers, csms]);
 
     const handleInputTypeChange = (type: CSMInputType, checked: boolean) => {
         if (checked) {
@@ -139,7 +150,9 @@ const TaskFormModal: React.FC<{
             dueDate,
             category,
             csmInputTypes,
-            assignedCustomerIds: assignToAll ? customers.map(c => c.id) : selectedCustomerIds,
+            assignmentType,
+            assignedCustomerIds: assignmentType === 'customer' ? (assignToAll ? customers.map(c => c.id) : selectedCustomerIds) : [],
+            assignedCsmIds: assignmentType === 'csm' ? (assignToAllCsms ? csms.map(c => c.id) : selectedCsmIds) : [],
             multiSelectOptions: csmInputTypes.includes(CSMInputType.MultiSelect) 
                 ? multiSelectOptionsStr.split(',').map((label, index) => ({
                     id: `opt_${Date.now()}_${index}`,
@@ -167,6 +180,14 @@ const TaskFormModal: React.FC<{
             setSelectedCustomerIds(prev => [...prev, customerId]);
         } else {
             setSelectedCustomerIds(prev => prev.filter(id => id !== customerId));
+        }
+    };
+
+    const handleCsmSelection = (csmId: string, isChecked: boolean) => {
+        if (isChecked) {
+            setSelectedCsmIds(prev => [...prev, csmId]);
+        } else {
+            setSelectedCsmIds(prev => prev.filter(id => id !== csmId));
         }
     };
 
@@ -209,30 +230,73 @@ const TaskFormModal: React.FC<{
                     </div>
                 )}
                  <div>
-                    <label className="block text-sm font-medium text-slate-700">Assign to Customers</label>
-                    <div className="mt-2 space-y-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Assign To</label>
+                    <div className="flex items-center gap-6">
                         <div className="flex items-center">
-                            <input id="assign-all" type="checkbox" checked={assignToAll} onChange={e => { setAssignToAll(e.target.checked); if(e.target.checked) setSelectedCustomerIds([]) }} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
-                            <label htmlFor="assign-all" className="ml-2 block text-sm text-slate-900">Assign to all customers</label>
+                            <input type="radio" id="assign-type-customer" name="assignment-type" value="customer" checked={assignmentType === 'customer'} onChange={() => setAssignmentType('customer')} className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                            <label htmlFor="assign-type-customer" className="ml-2 block text-sm text-slate-900">Customers</label>
                         </div>
-                        {!assignToAll && (
-                             <div className="mt-1 w-full max-h-40 overflow-y-auto border border-slate-300 rounded-md p-2 space-y-1 bg-white">
-                                {customers.map(c => (
-                                    <div key={c.id} className="flex items-center p-1 rounded-md hover:bg-slate-50">
-                                        <input
-                                            id={`customer-${c.id}`}
-                                            type="checkbox"
-                                            checked={selectedCustomerIds.includes(c.id)}
-                                            onChange={e => handleCustomerSelection(c.id, e.target.checked)}
-                                            className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                                        />
-                                        <label htmlFor={`customer-${c.id}`} className="ml-3 block text-sm text-slate-900 flex-1 cursor-pointer">{c.name}</label>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                         <div className="flex items-center">
+                            <input type="radio" id="assign-type-csm" name="assignment-type" value="csm" checked={assignmentType === 'csm'} onChange={() => setAssignmentType('csm')} className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                            <label htmlFor="assign-type-csm" className="ml-2 block text-sm text-slate-900">CSMs</label>
+                        </div>
                     </div>
-                </div>
+                 </div>
+
+                {assignmentType === 'customer' ? (
+                     <div>
+                        <label className="block text-sm font-medium text-slate-700">Assign to Customers</label>
+                        <div className="mt-2 space-y-2">
+                            <div className="flex items-center">
+                                <input id="assign-all" type="checkbox" checked={assignToAll} onChange={e => { setAssignToAll(e.target.checked); if(e.target.checked) setSelectedCustomerIds([]) }} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                                <label htmlFor="assign-all" className="ml-2 block text-sm text-slate-900">Assign to all customers</label>
+                            </div>
+                            {!assignToAll && (
+                                 <div className="mt-1 w-full max-h-40 overflow-y-auto border border-slate-300 rounded-md p-2 space-y-1 bg-white">
+                                    {customers.map(c => (
+                                        <div key={c.id} className="flex items-center p-1 rounded-md hover:bg-slate-50">
+                                            <input
+                                                id={`customer-${c.id}`}
+                                                type="checkbox"
+                                                checked={selectedCustomerIds.includes(c.id)}
+                                                onChange={e => handleCustomerSelection(c.id, e.target.checked)}
+                                                className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                                            />
+                                            <label htmlFor={`customer-${c.id}`} className="ml-3 block text-sm text-slate-900 flex-1 cursor-pointer">{c.name}</label>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Assign to CSMs</label>
+                        <div className="mt-2 space-y-2">
+                            <div className="flex items-center">
+                                <input id="assign-all-csms" type="checkbox" checked={assignToAllCsms} onChange={e => { setAssignToAllCsms(e.target.checked); if(e.target.checked) setSelectedCsmIds([]) }} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                                <label htmlFor="assign-all-csms" className="ml-2 block text-sm text-slate-900">Assign to all CSMs</label>
+                            </div>
+                            {!assignToAllCsms && (
+                                 <div className="mt-1 w-full max-h-40 overflow-y-auto border border-slate-300 rounded-md p-2 space-y-1 bg-white">
+                                    {csms.map(c => (
+                                        <div key={c.id} className="flex items-center p-1 rounded-md hover:bg-slate-50">
+                                            <input
+                                                id={`csm-${c.id}`}
+                                                type="checkbox"
+                                                checked={selectedCsmIds.includes(c.id)}
+                                                onChange={e => handleCsmSelection(c.id, e.target.checked)}
+                                                className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                                            />
+                                            <label htmlFor={`csm-${c.id}`} className="ml-3 block text-sm text-slate-900 flex-1 cursor-pointer">{c.name}</label>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
 
                 <div className="flex justify-end pt-4">
                     <Button type="button" variant="secondary" onClick={onClose} className="mr-2">Cancel</Button>
@@ -280,6 +344,38 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
         return assignedCustomers;
     }, [customers, task.assignedCustomerIds, hasMultiSelect, selectedOptionFilter, completionStatusFilter, taskCompletions, task.id]);
 
+
+    if (task.assignmentType === 'csm') {
+        const assignedCsms = csms.filter(c => task.assignedCsmIds?.includes(c.id));
+        return (
+             <div className="mt-4 p-4 bg-slate-50 rounded-lg">
+                <h4 className="font-semibold text-slate-700 mb-2">CSM Completion Details</h4>
+                 <ul className="space-y-3">
+                    {assignedCsms.map(csm => {
+                        const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.csmId === csm.id);
+                        return (
+                            <li key={csm.id} className="flex items-start justify-between p-3 bg-white rounded-md border border-slate-200">
+                                <div className="flex items-start">
+                                    {completion?.isCompleted ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
+                                   <div>
+                                        <p className="font-semibold text-slate-800">{csm.name}</p>
+                                        {completion?.isCompleted && (
+                                            <div className="text-sm mt-1 text-slate-600 italic space-y-1">
+                                                {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: <MarkdownRenderer content={completion.notes} className="inline-block" /></p>}
+                                                {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
+                                                    <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
+                                                }
+                                            </div>
+                                        )}
+                                   </div>
+                               </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </div>
+        )
+    }
 
     return (
         <div className="mt-4 p-4 bg-slate-50 rounded-lg">
@@ -359,9 +455,11 @@ const DashboardStats: React.FC = () => {
         const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
         const getTaskCompletionPercent = (task: Task) => {
-            if (task.assignedCustomerIds.length === 0) return 100;
+            const assignedCount = task.assignmentType === 'csm' ? task.assignedCsmIds?.length || 0 : task.assignedCustomerIds.length;
+            if (assignedCount === 0) return 100;
+
             const completedCount = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted).length;
-            return (completedCount / task.assignedCustomerIds.length) * 100;
+            return (completedCount / assignedCount) * 100;
         };
 
         const overdueTasks = activeTasks.filter(t => new Date(t.dueDate) < now && getTaskCompletionPercent(t) < 100).length;
@@ -378,11 +476,21 @@ const DashboardStats: React.FC = () => {
             let completedAssignments = 0;
 
             activeTasks.forEach(task => {
-                const assignmentsForThisCsm = task.assignedCustomerIds.filter(id => csmCustomerIds.has(id));
-                if(assignmentsForThisCsm.length > 0) {
-                    totalAssignments += assignmentsForThisCsm.length;
-                    const completions = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted && csmCustomerIds.has(tc.customerId)).length;
-                    completedAssignments += completions;
+                if (task.assignmentType === 'customer') {
+                    const assignmentsForThisCsm = task.assignedCustomerIds.filter(id => csmCustomerIds.has(id));
+                    if(assignmentsForThisCsm.length > 0) {
+                        totalAssignments += assignmentsForThisCsm.length;
+                        const completions = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted && csmCustomerIds.has(tc.customerId || '')).length;
+                        completedAssignments += completions;
+                    }
+                } else if (task.assignmentType === 'csm') {
+                    if (task.assignedCsmIds?.includes(csm.id)) {
+                        totalAssignments++;
+                        const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.csmId === csm.id);
+                        if (completion?.isCompleted) {
+                            completedAssignments++;
+                        }
+                    }
                 }
             });
 
@@ -438,9 +546,10 @@ const ManagerView: React.FC = () => {
 
 
     const getTaskCompletionPercent = (task: Task) => {
-        if(task.assignedCustomerIds.length === 0) return 0;
+        const assignedCount = task.assignmentType === 'csm' ? task.assignedCsmIds?.length || 0 : task.assignedCustomerIds.length;
+        if (assignedCount === 0) return 0;
         const completedCount = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted).length;
-        return (completedCount / task.assignedCustomerIds.length) * 100;
+        return (completedCount / assignedCount) * 100;
     };
 
     const filteredTasks = useMemo(() => {
@@ -488,22 +597,28 @@ const ManagerView: React.FC = () => {
     };
 
     const handleExportTask = (task: Task) => {
-        const assignedCustomers = customers.filter(c => task.assignedCustomerIds.includes(c.id));
+        const isCsmTask = task.assignmentType === 'csm';
+        const assignedEntities = isCsmTask 
+            ? csms.filter(c => task.assignedCsmIds?.includes(c.id))
+            : customers.filter(c => task.assignedCustomerIds.includes(c.id));
         
         const csvRows = [
-            ['Customer Name', 'CSM Name', 'Completion Status', 'Notes', 'Response']
+            [isCsmTask ? 'CSM Name' : 'Customer Name', 'Assigned CSM', 'Completion Status', 'Notes', 'Response']
         ];
 
-        for (const customer of assignedCustomers) {
-            const csm = csms.find(c => c.id === customer.assignedCsmId);
-            const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
+        for (const entity of assignedEntities) {
+            const csm = isCsmTask ? entity : csms.find(c => c.id === (entity as Customer).assignedCsmId);
+            const completion = taskCompletions.find(tc => 
+                tc.taskId === task.id && 
+                (isCsmTask ? tc.csmId === entity.id : tc.customerId === entity.id)
+            );
             const responseLabel = completion?.selectedOptions
                 ?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label)
                 .join(', ') || '';
 
             csvRows.push([
-                `"${customer.name}"`,
-                `"${csm?.name || 'Unassigned'}"`,
+                `"${entity.name}"`,
+                `"${csm?.name || 'N/A'}"`,
                 completion?.isCompleted ? 'Completed' : 'Incomplete',
                 `"${completion?.notes || ''}"`,
                 `"${responseLabel}"`
@@ -585,8 +700,8 @@ const ManagerView: React.FC = () => {
                                         </div>
                                         <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
                                         <div className="flex items-center gap-4 text-sm mt-2 text-slate-600">
-                                            <span className={`font-semibold ${isOverdue(task.dueDate) ? 'text-red-500' : ''}`}>Due: {task.dueDate}</span>
-                                            <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignedCustomerIds.length} Customers</span></span>
+                                            <span className={`font-semibold ${isOverdue(task.dueDate) && completionPercent < 100 ? 'text-red-500' : ''}`}>Due: {task.dueDate}</span>
+                                            <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignmentType === 'csm' ? `${task.assignedCsmIds?.length || 0} CSMs` : `${task.assignedCustomerIds.length} Customers`}</span></span>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0 ml-4">
