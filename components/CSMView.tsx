@@ -74,14 +74,19 @@ const TaskCompletionForm: React.FC<{
 }
 
 const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = ({ entityId, entityType }) => {
-    const { 
-        customers, users, tasks, taskCompletions, setTaskCompletions,
-        actionItems, setActionItems,
-        bugReports, setBugReports,
-        featureRequests, setFeatureRequests,
-        meetingNotes, setMeetingNotes,
-        apiKey
-    } = useAppContext();
+const {
+  customers, users, tasks, taskCompletions,
+  actionItems,
+  bugReports,
+  featureRequests,
+  meetingNotes,
+  addActionItem, toggleActionItem, removeActionItem,
+  addBugReport, toggleBugReport, removeBugReport,
+  addFeatureRequest, toggleFeatureRequest, removeFeatureRequest,
+  saveMeetingNotes,
+  saveTaskCompletion,
+  apiKey
+} = useAppContext();
 
     const isCsmView = entityType === 'csm';
     
@@ -125,15 +130,9 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, entityId, isCsmView]);
 
     // Notes Handlers
-    const handleSaveNotes = () => {
-        setMeetingNotes(prev => {
-            const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
-            if (existing) {
-                return prev.map(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId) ? { ...n, text: currentNotes } : n);
-            }
-            return [...prev, { customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, text: currentNotes }];
-        });
-    };
+const handleSaveNotes = async () => {
+  await saveMeetingNotes(isCsmView ? entityId : (entityId ?? ''), currentNotes);
+};
 
     const handleSummarizeNotes = async () => {
         if (!currentNotes || !apiKey) return;
@@ -154,88 +153,71 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     };
 
     // Action Item Handlers
-    const handleAddActionItem = (e: React.FormEvent) => {
-        e.preventDefault();
-        if(!newActionItem.trim()) return;
-        const newItem: ActionItem = {
-            id: `ai_${Date.now()}`,
-            customerId: isCsmView ? undefined : entityId,
-            csmId: isCsmView ? entityId : undefined,
-            text: newActionItem.trim(),
-            isCompleted: false,
-            createdAt: Date.now()
-        };
-        setActionItems(prev => [newItem, ...prev]);
-        setNewActionItem('');
-    };
+const handleAddActionItem = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!newActionItem.trim()) return;
+  await addActionItem({
+    customerId: isCsmView ? undefined : entityId,
+    text: newActionItem.trim()
+  });
+  setNewActionItem('');
+};
     
-    const handleToggleActionItem = (id: string, isCompleted: boolean) => {
-        setActionItems(prev => prev.map(ai => ai.id === id ? { ...ai, isCompleted: !isCompleted, completedAt: !isCompleted ? Date.now() : undefined } : ai));
-    };
+const handleToggleActionItem = async (id: string, isCompleted: boolean) => {
+  await toggleActionItem(id, !isCompleted);
+};
 
-    const handleDeleteActionItem = (id: string) => {
-        if(window.confirm('Are you sure you want to delete this action item?')) {
-            setActionItems(prev => prev.filter(ai => ai.id !== id));
-        }
-    }
+const handleDeleteActionItem = async (id: string) => {
+  if (window.confirm('Are you sure you want to delete this action item?')) {
+    await removeActionItem(id);
+  }
+};
 
     // Bug Report Handlers
-    const handleAddBug = (e: React.FormEvent) => {
-        e.preventDefault();
-        if(!newBugName.trim()) return;
-        const newBug: BugReport = {
-            id: `bug_${Date.now()}`,
-            customerId: isCsmView ? undefined : entityId,
-            csmId: isCsmView ? entityId : undefined,
-            name: newBugName.trim(),
-            ticketLink: newBugLink.trim(),
-            isCompleted: false,
-            createdAt: Date.now()
-        };
-        setBugReports(prev => [newBug, ...prev]);
-        setNewBugName('');
-        setNewBugLink('');
-    };
+const handleAddBug = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!newBugName.trim()) return;
+  await addBugReport({
+    customerId: isCsmView ? undefined : entityId,
+    name: newBugName.trim(),
+    ticketLink: newBugLink.trim()
+  });
+  setNewBugName('');
+  setNewBugLink('');
+};
 
-    const handleCompleteBug = (id: string) => {
-        setBugReports(prev => prev.map(b => b.id === id ? { ...b, isCompleted: true, completedAt: Date.now() } : b));
-    };
+const handleCompleteBug = async (id: string) => {
+  await toggleBugReport(id, true);
+};
     
     // Feature Request Handlers
-     const handleAddFeatureRequest = (e: React.FormEvent) => {
-        e.preventDefault();
-        if(!newFeatureRequest.trim()) return;
-        const newRequest: FeatureRequest = {
-            id: `fr_${Date.now()}`,
-            customerId: isCsmView ? undefined : entityId,
-            csmId: isCsmView ? entityId : undefined,
-            text: newFeatureRequest.trim(),
-            isCompleted: false,
-            createdAt: Date.now()
-        };
-        setFeatureRequests(prev => [newRequest, ...prev]);
-        setNewFeatureRequest('');
-    };
+const handleAddFeatureRequest = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!newFeatureRequest.trim()) return;
+  await addFeatureRequest({
+    customerId: isCsmView ? undefined : entityId,
+    text: newFeatureRequest.trim()
+  });
+  setNewFeatureRequest('');
+};
 
-    const handleCompleteFeatureRequest = (id: string) => {
-        setFeatureRequests(prev => prev.map(fr => fr.id === id ? { ...fr, isCompleted: true, completedAt: Date.now() } : fr));
-    };
+const handleCompleteFeatureRequest = async (id: string) => {
+  await toggleFeatureRequest(id, true);
+};
 
 
     // Task Completion Handlers
-    const handleSaveCompletion = (taskId: string, completionData: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions'>) => {
-        setTaskCompletions(prev => {
-            const existingIndex = prev.findIndex(tc => tc.taskId === taskId && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
-            const newCompletion: TaskCompletion = { ...completionData, taskId, customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, completedAt: Date.now() };
-            if (existingIndex > -1) {
-                const updated = [...prev];
-                updated[existingIndex] = newCompletion;
-                return updated;
-            }
-            return [...prev, newCompletion];
-        });
-        setEditingTaskId(null);
-    };
+const handleSaveCompletion = async (taskId: string, completionData: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions'>) => {
+  await saveTaskCompletion({
+    taskId,
+    customerId: isCsmView ? undefined : entityId,
+    csmId: isCsmView ? entityId : undefined,
+    isCompleted: completionData.isCompleted,
+    notes: completionData.notes,
+    selectedOptions: completionData.selectedOptions,
+  });
+  setEditingTaskId(null);
+};
 
     // Rendering Logic
     const incompleteActionItems = entityActionItems.filter(ai => !ai.isCompleted);
