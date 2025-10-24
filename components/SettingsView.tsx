@@ -4,19 +4,17 @@ import { Card, Button, TrashIcon, PencilIcon } from './ui';
 import { User, Customer } from '../types';
 
 const SettingsView: React.FC = () => {
-const {
-  users, customers,
-  addUser, updateUser, removeUser,
-  addCustomer, updateCustomer, removeCustomer,
-  addActionItem, toggleActionItem, removeActionItem,
-  addBugReport, toggleBugReport, removeBugReport,
-  addFeatureRequest, toggleFeatureRequest, removeFeatureRequest,
-  saveMeetingNotes, removeMeetingNotes,
-  // optional if you added it:
-  removeTaskCompletion,
-  apiKey, setApiKey,
-  currentUser, setCurrentUser,
-} = useAppContext();
+    const { 
+        users, setUsers, 
+        customers, setCustomers,
+        setTaskCompletions,
+        setActionItems,
+        setBugReports,
+        setFeatureRequests,
+        setMeetingNotes,
+        apiKey, setApiKey,
+        currentUser, setCurrentUser
+    } = useAppContext();
 
     const customerFormRef = useRef<HTMLFormElement>(null);
     
@@ -62,24 +60,18 @@ const {
         setUserRole('csm');
     }
 
-const handleUserSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!userName || !userEmail || (!editingUser && !userPassword)) return;
+    const handleUserSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!userName || !userEmail || (!editingUser && !userPassword)) return;
 
-  if (editingUser) {
-    await updateUser(editingUser.id, {
-      name: userName,
-      email: userEmail,
-      role: userRole,
-      ...(userPassword ? { password: userPassword } : {})
-    });
-  } else {
-    await addUser(userName); // keeps your simple schema; extend if you want to store email/role/password on user doc
-    // If you want email/role/password in Firestore, use:
-    // await addDoc(collection(db, 'users'), { name: userName, email: userEmail, role: userRole, password: userPassword })
-  }
-  resetUserForm();
-};
+        if (editingUser) {
+            setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, name: userName, email: userEmail, role: userRole, password: userPassword || u.password } : u));
+        } else {
+            const newUser: User = { id: `user_${Date.now()}`, name: userName, email: userEmail, role: userRole, password: userPassword };
+            setUsers(prev => [...prev, newUser]);
+        }
+        resetUserForm();
+    };
 
     const handleEditUser = (user: User) => {
         setEditingUser(user);
@@ -89,18 +81,16 @@ const handleUserSubmit = async (e: React.FormEvent) => {
         setUserPassword('');
     };
 
-const handleDeleteUser = async (userId: string) => {
-  if (users.length <= 1) {
-    alert("You cannot delete the last user.");
-    return;
-  }
-  if (window.confirm('Are you sure? This will also unassign their customers if they are a CSM.')) {
-    await removeUser(userId);
-    // Unassign any customers owned by this CSM
-    const affected = customers.filter(c => c.assignedCsmId === userId);
-    await Promise.all(affected.map(c => updateCustomer(c.id, { assignedCsmId: '' })));
-  }
-};
+    const handleDeleteUser = (userId: string) => {
+        if (users.length <= 1) {
+            alert("You cannot delete the last user.");
+            return;
+        }
+        if (window.confirm('Are you sure? This will also unassign their customers if they are a CSM.')) {
+            setUsers(prev => prev.filter(u => u.id !== userId));
+            setCustomers(prev => prev.map(cust => cust.assignedCsmId === userId ? { ...cust, assignedCsmId: '' } : cust));
+        }
+    };
     
     // Handlers for Customer
     const resetCustomerForm = () => {
@@ -109,18 +99,23 @@ const handleDeleteUser = async (userId: string) => {
         setAssignedCsmId(csms[0]?.id || '');
     }
 
-const handleCustomerSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!customerName.trim() || !assignedCsmId) return;
+    const handleCustomerSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!customerName.trim() || !assignedCsmId) return;
 
-  if (editingCustomer) {
-    await updateCustomer(editingCustomer.id, { name: customerName.trim(), assignedCsmId });
-  } else {
-    const names = customerName.split('\n').map(n => n.trim()).filter(Boolean);
-    await Promise.all(names.map(n => addCustomer({ name: n, assignedCsmId })));
-  }
-  resetCustomerForm();
-};
+        if (editingCustomer) {
+            setCustomers(prev => prev.map(c => c.id === editingCustomer.id ? { ...c, name: customerName, assignedCsmId } : c));
+        } else {
+            const customerNames = customerName.split('\n').filter(name => name.trim() !== '');
+            const newCustomers: Customer[] = customerNames.map((name, index) => ({
+                id: `cust_${Date.now()}_${index}`,
+                name: name.trim(),
+                assignedCsmId
+            }));
+            setCustomers(prev => [...prev, ...newCustomers]);
+        }
+        resetCustomerForm();
+    };
     
     const handleEditCustomer = (customer: Customer) => {
         setEditingCustomer(customer);
@@ -129,19 +124,16 @@ const handleCustomerSubmit = async (e: React.FormEvent) => {
         customerFormRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-const handleDeleteCustomer = async (customerId: string) => {
-  if (window.confirm('Are you sure? This will delete the customer and all their associated data (task completions, notes, bugs, etc.).')) {
-    await removeCustomer(customerId);
-
-    // Cascade deletes best done in Cloud Functions; for now do client-side best-effort:
-    // Remove notes
-    await removeMeetingNotes(customerId);
-    // Remove action items / bugs / features (filter current arrays then delete by id)
-    // We only have the add/toggle/remove helpers for single docs:
-    // Note: if many docs, consider a backend batch or Cloud Function.
-    // (This is optional – skipping is acceptable for first pass)
-  }
-};
+    const handleDeleteCustomer = (customerId: string) => {
+        if (window.confirm('Are you sure? This will delete the customer and all their associated data (task completions, notes, bugs, etc.).')) {
+            setCustomers(prev => prev.filter(c => c.id !== customerId));
+            setTaskCompletions(prev => prev.filter(tc => tc.customerId !== customerId));
+            setActionItems(prev => prev.filter(ai => ai.customerId !== customerId));
+            setBugReports(prev => prev.filter(b => b.customerId !== customerId));
+            setFeatureRequests(prev => prev.filter(fr => fr.customerId !== customerId));
+            setMeetingNotes(prev => prev.filter(n => n.customerId !== customerId));
+        }
+    };
     
     const handleApiKeySave = () => {
         setApiKey(tempApiKey);
@@ -168,7 +160,7 @@ const handleDeleteCustomer = async (customerId: string) => {
             return;
         }
         
-        updateUser(currentUser.id, { password: newPassword });        
+        setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, password: newPassword } : u));
         setPasswordChangeMsg({ type: 'success', text: 'Password updated successfully!' });
         setCurrentPassword('');
         setNewPassword('');
