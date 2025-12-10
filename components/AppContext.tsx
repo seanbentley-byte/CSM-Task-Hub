@@ -184,7 +184,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             console.error("Sync Error", error);
             // Don't alert on auto-saves to avoid disrupting user
             if (direction === 'pull') {
-                 alert("Sync Failed. Check console.");
+                 console.log("Sync Failed - this may be due to network issues or Apps Script limits.");
             }
         } finally {
             setIsSyncing(false);
@@ -209,7 +209,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [hasUnsavedChanges, isSheetConnected, syncData]);
 
     // --- Auto-Load Interval ---
-    // Checks every 5 minutes. Only pulls if NO unsaved changes locally.
+    // Checks every 1 minute (was 5). Only pulls if NO unsaved changes locally.
     useEffect(() => {
         if (!isSheetConnected) return;
         
@@ -218,7 +218,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                  console.log('Auto-pulling...');
                  syncData('pull');
              }
-        }, 5 * 60 * 1000); // 5 minutes
+        }, 60 * 1000); // 1 minute
 
         return () => clearInterval(interval);
     }, [hasUnsavedChanges, isSheetConnected, syncData]);

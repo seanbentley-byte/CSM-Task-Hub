@@ -140,10 +140,14 @@ const SyncStatus: React.FC = () => {
     }
 
     return (
-        <div className="flex items-center text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
+        <button 
+            onClick={() => syncData('pull')}
+            className="flex items-center text-sm text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-full transition-colors cursor-pointer"
+            title="Click to check for updates from Google Sheets"
+        >
             <CheckCircleIcon className="w-4 h-4 mr-2" />
             <span className="font-medium">All Saved</span>
-        </div>
+        </button>
     );
 };
 
