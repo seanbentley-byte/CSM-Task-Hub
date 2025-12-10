@@ -52,16 +52,39 @@ const DEFAULT_SHEETS_CONFIG: GoogleSheetsConfig = {
     webAppUrl: 'https://script.google.com/macros/s/AKfycbznQomIHirp_udhUAOLjENRMVHAOipknWS-R2Ig4lLmujEfSloWh9G4qYSTfhBFNbUy/exec'
 };
 
+// Helper hook for localStorage persistence
+function useStickyState<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stickyValue = localStorage.getItem(key);
+      return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+    } catch (error) {
+        console.warn(`Error parsing localStorage key "${key}":`, error);
+        return defaultValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+        console.warn(`Error saving localStorage key "${key}":`, error);
+    }
+  }, [key, value]);
+
+  return [value, setValue];
+}
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    // Core Data
-    const [tasks, setTasks] = useState<Task[]>(initialTasks);
-    const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
-    const [users, setUsers] = useState<User[]>(initialUsers);
-    const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>(initialTaskCompletions);
-    const [actionItems, setActionItems] = useState<ActionItem[]>(initialActionItems);
-    const [bugReports, setBugReports] = useState<BugReport[]>(initialBugReports);
-    const [featureRequests, setFeatureRequests] = useState<FeatureRequest[]>(initialFeatureRequests);
-    const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(initialMeetingNotes);
+    // Core Data - Persisted in LocalStorage to survive reloads
+    const [tasks, setTasks] = useStickyState<Task[]>('csm_tasks', initialTasks);
+    const [customers, setCustomers] = useStickyState<Customer[]>('csm_customers', initialCustomers);
+    const [users, setUsers] = useStickyState<User[]>('csm_users', initialUsers);
+    const [taskCompletions, setTaskCompletions] = useStickyState<TaskCompletion[]>('csm_completions', initialTaskCompletions);
+    const [actionItems, setActionItems] = useStickyState<ActionItem[]>('csm_actionItems', initialActionItems);
+    const [bugReports, setBugReports] = useStickyState<BugReport[]>('csm_bugReports', initialBugReports);
+    const [featureRequests, setFeatureRequests] = useStickyState<FeatureRequest[]>('csm_featureRequests', initialFeatureRequests);
+    const [meetingNotes, setMeetingNotes] = useStickyState<MeetingNote[]>('csm_meetingNotes', initialMeetingNotes);
     
     // Auth & Config
     const [apiKey, setApiKey] = useState<string | null>(() => localStorage.getItem('gemini-api-key'));
