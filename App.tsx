@@ -158,7 +158,8 @@ const Header: React.FC<{
   setCurrentView: (view: 'dashboard' | 'settings') => void;
 }> = ({ onLogout, currentUser, currentRole, setCurrentRole, currentCsmId, setCurrentCsmId, currentView, setCurrentView }) => {
     const { users } = useAppContext();
-    const csms = users.filter(u => u.role === 'csm');
+    // Allow any user to be selected in the dropdown
+    const assignableUsers = users;
 
     return (
         <header className="bg-white shadow-sm mb-8">
@@ -183,7 +184,7 @@ const Header: React.FC<{
                                     onClick={() => setCurrentRole('csm')}
                                     className={`px-3 py-1 text-sm font-semibold rounded ${currentRole === 'csm' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600'}`}
                                 >
-                                    CSM
+                                    User View
                                 </button>
                             </div>
                             {currentRole === 'csm' && setCurrentCsmId && (
@@ -192,9 +193,9 @@ const Header: React.FC<{
                                     onChange={e => setCurrentCsmId(e.target.value)}
                                     className="w-48 pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                                 >
-                                    {csms.map(csm => (
-                                        <option key={csm.id} value={csm.id}>
-                                            Viewing as {csm.name}
+                                    {assignableUsers.map(user => (
+                                        <option key={user.id} value={user.id}>
+                                            Viewing as {user.name}
                                         </option>
                                     ))}
                                 </select>
@@ -225,9 +226,24 @@ const AppContent: React.FC = () => {
     const [currentView, setCurrentView] = useState<'dashboard' | 'settings'>('dashboard');
     const [currentRole, setCurrentRole] = useState<'manager' | 'csm'>('manager');
 
-    const csms = users.filter(u => u.role === 'csm');
-    const [currentCsmId, setCurrentCsmId] = useState<string>(csms[0]?.id || '');
+    // Default to the current user's own agenda if they are in the list, otherwise the first user
+    const [currentCsmId, setCurrentCsmId] = useState<string>('');
     
+    useEffect(() => {
+        if (!currentUser) return;
+        
+        // When switching to CSM role (User View), try to default to the current user if possible
+        if (currentRole === 'csm') {
+            if (!currentCsmId) {
+                // If not set yet, default to self
+                 setCurrentCsmId(currentUser.id);
+            } else if (!users.find(u => u.id === currentCsmId)) {
+                // If current selection is invalid (e.g. user deleted), reset to self or first user
+                setCurrentCsmId(currentUser.id);
+            }
+        }
+    }, [currentRole, currentUser, users, currentCsmId]);
+
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     
     useEffect(() => {
@@ -236,13 +252,6 @@ const AppContent: React.FC = () => {
         }
     }, [currentUser, apiKey]);
 
-    useEffect(() => {
-        if (csms.length > 0 && !csms.find(c => c.id === currentCsmId)) {
-            setCurrentCsmId(csms[0].id);
-        } else if (csms.length === 0 && currentCsmId !== '') {
-            setCurrentCsmId('');
-        }
-    }, [csms, currentCsmId]);
 
     const handleLogout = () => {
         setCurrentUser(null);
@@ -252,7 +261,7 @@ const AppContent: React.FC = () => {
         return <Login />;
     }
 
-    // CSM-specific view
+    // Standard User (CSM) specific view
     if (currentUser.role === 'csm') {
         return (
             <>
@@ -293,7 +302,7 @@ const AppContent: React.FC = () => {
                 {currentView === 'dashboard' ? (
                      <>
                         {currentRole === 'manager' && <ManagerView />}
-                        {currentRole === 'csm' && csms.length > 0 && currentCsmId && <CSMView csmId={currentCsmId} />}
+                        {currentRole === 'csm' && users.length > 0 && currentCsmId && <CSMView csmId={currentCsmId} />}
                      </>
                 ) : (
                     <SettingsView />

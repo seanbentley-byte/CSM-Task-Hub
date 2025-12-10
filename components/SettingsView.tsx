@@ -100,13 +100,14 @@ const SettingsView: React.FC = () => {
     // Sheets Config
     const [webAppUrl, setWebAppUrl] = useState('');
     
-    const csms = users.filter(u => u.role === 'csm');
+    // Allow assigning customers to ANY user (Manager or CSM)
+    const assignableUsers = users;
 
     useEffect(() => {
-        if (csms.length > 0 && !assignedCsmId) {
-            setAssignedCsmId(csms[0].id);
+        if (assignableUsers.length > 0 && !assignedCsmId) {
+            setAssignedCsmId(assignableUsers[0].id);
         }
-    }, [csms, assignedCsmId]);
+    }, [assignableUsers, assignedCsmId]);
     
     useEffect(() => {
         setTempApiKey(apiKey || '');
@@ -163,7 +164,7 @@ const SettingsView: React.FC = () => {
     const resetCustomerForm = () => {
         setEditingCustomer(null);
         setCustomerName('');
-        setAssignedCsmId(csms[0]?.id || '');
+        setAssignedCsmId(assignableUsers[0]?.id || '');
     }
 
     const handleCustomerSubmit = (e: React.FormEvent) => {
@@ -370,13 +371,13 @@ const SettingsView: React.FC = () => {
                         ) : (
                             <textarea value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Enter customer names, one per line" rows={3} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md" />
                         )}
-                        <select value={assignedCsmId} onChange={e => setAssignedCsmId(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md" disabled={csms.length === 0}>
-                            <option value="">{csms.length > 0 ? 'Select a CSM' : 'Please add a CSM first'}</option>
-                            {csms.map(csm => <option key={csm.id} value={csm.id}>{csm.name}</option>)}
+                        <select value={assignedCsmId} onChange={e => setAssignedCsmId(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md" disabled={assignableUsers.length === 0}>
+                            <option value="">{assignableUsers.length > 0 ? 'Select a User' : 'Please add a User first'}</option>
+                            {assignableUsers.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
                         </select>
                         <div className="flex justify-end gap-2">
                              {editingCustomer && <Button type="button" variant="secondary" onClick={resetCustomerForm}>Cancel</Button>}
-                            <Button type="submit" disabled={csms.length === 0}>{editingCustomer ? 'Update Customer' : 'Add Customer(s)'}</Button>
+                            <Button type="submit" disabled={assignableUsers.length === 0}>{editingCustomer ? 'Update Customer' : 'Add Customer(s)'}</Button>
                         </div>
                     </form>
                     <ul className="space-y-2 max-h-96 overflow-y-auto">

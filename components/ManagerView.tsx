@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Task, CSMInputType, TaskCategory, MultiSelectOption, Customer, User } from '../types';
 import { useAppContext } from './AppContext';
@@ -98,7 +99,7 @@ const TaskFormModal: React.FC<{
     initialData?: Partial<AIGeneratedTaskData>;
 }> = ({ isOpen, onClose, editingTask, initialData }) => {
     const { customers, users, setTasks } = useAppContext();
-    const csms = users.filter(u => u.role === 'csm');
+    const assignableUsers = users; // Allow assignment to any user
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [dueDate, setDueDate] = useState('');
@@ -130,9 +131,9 @@ const TaskFormModal: React.FC<{
             setAssignToAll(editingTask?.assignedCustomerIds.length === customers.length);
 
             setSelectedCsmIds(editingTask?.assignedCsmIds || []);
-            setAssignToAllCsms(!!editingTask?.assignedCsmIds && editingTask.assignedCsmIds.length === csms.length);
+            setAssignToAllCsms(!!editingTask?.assignedCsmIds && editingTask.assignedCsmIds.length === assignableUsers.length);
         }
-    }, [editingTask, initialData, isOpen, customers, csms]);
+    }, [editingTask, initialData, isOpen, customers, assignableUsers]);
 
     const handleInputTypeChange = (type: CSMInputType, checked: boolean) => {
         if (checked) {
@@ -153,7 +154,7 @@ const TaskFormModal: React.FC<{
             csmInputTypes,
             assignmentType,
             assignedCustomerIds: assignmentType === 'customer' ? (assignToAll ? customers.map(c => c.id) : selectedCustomerIds) : [],
-            assignedCsmIds: assignmentType === 'csm' ? (assignToAllCsms ? csms.map(c => c.id) : selectedCsmIds) : [],
+            assignedCsmIds: assignmentType === 'csm' ? (assignToAllCsms ? assignableUsers.map(c => c.id) : selectedCsmIds) : [],
             multiSelectOptions: csmInputTypes.includes(CSMInputType.MultiSelect) 
                 ? multiSelectOptionsStr.split(',').map((label, index) => ({
                     id: `opt_${Date.now()}_${index}`,
@@ -214,7 +215,7 @@ const TaskFormModal: React.FC<{
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-slate-700">CSM Input Types</label>
+                    <label className="block text-sm font-medium text-slate-700">Input Types</label>
                     <div className="mt-2 space-y-2">
                         {Object.values(CSMInputType).map(type => (
                             <div key={type} className="flex items-center">
@@ -239,7 +240,7 @@ const TaskFormModal: React.FC<{
                         </div>
                          <div className="flex items-center">
                             <input type="radio" id="assign-type-csm" name="assignment-type" value="csm" checked={assignmentType === 'csm'} onChange={() => setAssignmentType('csm')} className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
-                            <label htmlFor="assign-type-csm" className="ml-2 block text-sm text-slate-900">CSMs</label>
+                            <label htmlFor="assign-type-csm" className="ml-2 block text-sm text-slate-900">Users (CSMs/Managers)</label>
                         </div>
                     </div>
                  </div>
@@ -272,15 +273,15 @@ const TaskFormModal: React.FC<{
                     </div>
                 ) : (
                     <div>
-                        <label className="block text-sm font-medium text-slate-700">Assign to CSMs</label>
+                        <label className="block text-sm font-medium text-slate-700">Assign to Users</label>
                         <div className="mt-2 space-y-2">
                             <div className="flex items-center">
                                 <input id="assign-all-csms" type="checkbox" checked={assignToAllCsms} onChange={e => { setAssignToAllCsms(e.target.checked); if(e.target.checked) setSelectedCsmIds([]) }} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
-                                <label htmlFor="assign-all-csms" className="ml-2 block text-sm text-slate-900">Assign to all CSMs</label>
+                                <label htmlFor="assign-all-csms" className="ml-2 block text-sm text-slate-900">Assign to all Users</label>
                             </div>
                             {!assignToAllCsms && (
                                  <div className="mt-1 w-full max-h-40 overflow-y-auto border border-slate-300 rounded-md p-2 space-y-1 bg-white">
-                                    {csms.map(c => (
+                                    {assignableUsers.map(c => (
                                         <div key={c.id} className="flex items-center p-1 rounded-md hover:bg-slate-50">
                                             <input
                                                 id={`csm-${c.id}`}
@@ -289,7 +290,7 @@ const TaskFormModal: React.FC<{
                                                 onChange={e => handleCsmSelection(c.id, e.target.checked)}
                                                 className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
                                             />
-                                            <label htmlFor={`csm-${c.id}`} className="ml-3 block text-sm text-slate-900 flex-1 cursor-pointer">{c.name}</label>
+                                            <label htmlFor={`csm-${c.id}`} className="ml-3 block text-sm text-slate-900 flex-1 cursor-pointer">{c.name} ({c.role})</label>
                                         </div>
                                     ))}
                                 </div>
@@ -310,7 +311,7 @@ const TaskFormModal: React.FC<{
 
 const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
     const { customers, users, taskCompletions } = useAppContext();
-    const csms = users.filter(u => u.role === 'csm');
+    const assignableUsers = users;
     const [selectedOptionFilter, setSelectedOptionFilter] = useState<string>('all');
     const [completionStatusFilter, setCompletionStatusFilter] = useState<'all' | 'completed' | 'incomplete'>('all');
 
@@ -348,10 +349,10 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
 
 
     if (task.assignmentType === 'csm') {
-        const assignedCsms = csms.filter(c => task.assignedCsmIds?.includes(c.id));
+        const assignedCsms = assignableUsers.filter(c => task.assignedCsmIds?.includes(c.id));
         return (
              <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-                <h4 className="font-semibold text-slate-700 mb-2">CSM Completion Details</h4>
+                <h4 className="font-semibold text-slate-700 mb-2">User Completion Details</h4>
                  <ul className="space-y-3">
                     {assignedCsms.map(csm => {
                         const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.csmId === csm.id);
@@ -427,7 +428,7 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
                                 {completion?.isCompleted ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
                                <div>
                                     <p className="font-semibold text-slate-800">{customer.name}</p>
-                                    <p className="text-sm text-slate-500">CSM: {csm?.name || 'Unassigned'}</p>
+                                    <p className="text-sm text-slate-500">Assigned To: {csm?.name || 'Unassigned'}</p>
                                     {completion?.isCompleted && (
                                         <div className="text-sm mt-1 text-slate-600 italic space-y-1">
                                             {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: <MarkdownRenderer content={completion.notes} className="inline-block" /></p>}
@@ -450,7 +451,7 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
 
 const DashboardStats: React.FC = () => {
     const { users, customers, tasks, taskCompletions } = useAppContext();
-    const csms = users.filter(u => u.role === 'csm');
+    const assignableUsers = users;
 
     const stats = useMemo(() => {
         const activeTasks = tasks.filter(t => !t.isArchived);
@@ -471,7 +472,7 @@ const DashboardStats: React.FC = () => {
             return dueDate >= now && dueDate <= sevenDaysFromNow && getTaskCompletionPercent(t) < 100;
         }).length;
 
-        const csmCompletionRates = csms.map(csm => {
+        const csmCompletionRates = assignableUsers.map(csm => {
             const csmCustomers = customers.filter(c => c.assignedCsmId === csm.id);
             const csmCustomerIds = new Set(csmCustomers.map(c => c.id));
             
@@ -496,13 +497,16 @@ const DashboardStats: React.FC = () => {
                     }
                 }
             });
+            
+            // Only include stats if they actually have work assigned
+            if (totalAssignments === 0) return null;
 
             const rate = totalAssignments > 0 ? (completedAssignments / totalAssignments) * 100 : 100;
-            return { name: csm.name, rate: Math.round(rate) };
-        });
+            return { name: csm.name, rate: Math.round(rate), role: csm.role };
+        }).filter(Boolean) as { name: string, rate: number, role: string }[];
 
         return { overdueTasks, dueSoonTasks, csmCompletionRates };
-    }, [csms, customers, tasks, taskCompletions]);
+    }, [assignableUsers, customers, tasks, taskCompletions]);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
@@ -515,12 +519,12 @@ const DashboardStats: React.FC = () => {
                 <p className="text-4xl font-bold text-yellow-600">{stats.dueSoonTasks}</p>
             </Card>
             <Card className="lg:col-span-2">
-                 <h3 className="text-slate-500 font-semibold mb-2">CSM Completion Rates</h3>
-                 <div className="space-y-2">
+                 <h3 className="text-slate-500 font-semibold mb-2">User Completion Rates</h3>
+                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                      {stats.csmCompletionRates.map(csm => (
                          <div key={csm.name}>
                              <div className="flex justify-between text-sm font-medium text-slate-600 mb-1">
-                                 <span>{csm.name}</span>
+                                 <span>{csm.name} <span className="text-xs font-normal text-slate-400">({csm.role})</span></span>
                                  <span>{csm.rate}%</span>
                              </div>
                              <div className="bg-slate-200 rounded-full h-2.5">
@@ -528,6 +532,7 @@ const DashboardStats: React.FC = () => {
                             </div>
                          </div>
                      ))}
+                     {stats.csmCompletionRates.length === 0 && <p className="text-xs text-slate-400">No active assignments found.</p>}
                  </div>
             </Card>
         </div>
@@ -537,7 +542,7 @@ const DashboardStats: React.FC = () => {
 
 const ManagerView: React.FC = () => {
     const { tasks, setTasks, taskCompletions, setTaskCompletions, customers, users } = useAppContext();
-    const csms = users.filter(u => u.role === 'csm');
+    const assignableUsers = users;
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -603,15 +608,15 @@ const ManagerView: React.FC = () => {
     const handleExportTask = (task: Task) => {
         const isCsmTask = task.assignmentType === 'csm';
         const assignedEntities = isCsmTask 
-            ? csms.filter(c => task.assignedCsmIds?.includes(c.id))
+            ? assignableUsers.filter(c => task.assignedCsmIds?.includes(c.id))
             : customers.filter(c => task.assignedCustomerIds.includes(c.id));
         
         const csvRows = [
-            [isCsmTask ? 'CSM Name' : 'Customer Name', 'Assigned CSM', 'Completion Status', 'Notes', 'Response']
+            [isCsmTask ? 'User Name' : 'Customer Name', 'Assigned To', 'Completion Status', 'Notes', 'Response']
         ];
 
         for (const entity of assignedEntities) {
-            const csm = isCsmTask ? entity : csms.find(c => c.id === (entity as Customer).assignedCsmId);
+            const csm = isCsmTask ? entity : assignableUsers.find(c => c.id === (entity as Customer).assignedCsmId);
             const completion = taskCompletions.find(tc => 
                 tc.taskId === task.id && 
                 (isCsmTask ? tc.csmId === entity.id : tc.customerId === entity.id)
@@ -705,7 +710,7 @@ const ManagerView: React.FC = () => {
                                         <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
                                         <div className="flex items-center gap-4 text-sm mt-2 text-slate-600">
                                             <span className={`font-semibold ${isOverdue(task.dueDate) && completionPercent < 100 ? 'text-red-500' : ''}`}>Due: {task.dueDate}</span>
-                                            <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignmentType === 'csm' ? `${task.assignedCsmIds?.length || 0} CSMs` : `${task.assignedCustomerIds.length} Customers`}</span></span>
+                                            <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignmentType === 'csm' ? `${task.assignedCsmIds?.length || 0} Users` : `${task.assignedCustomerIds.length} Customers`}</span></span>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0 ml-4">
