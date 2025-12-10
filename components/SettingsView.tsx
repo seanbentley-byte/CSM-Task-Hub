@@ -280,7 +280,7 @@ const SettingsView: React.FC = () => {
                             <li><strong>IMPORTANT:</strong> Set "Who has access" to <strong>Anyone</strong>. (This allows the app to save data without a login popup).</li>
                             <li>Click <strong>Deploy</strong>. 
                                 <span className="block ml-5 text-xs text-slate-500 mt-1">
-                                    (Authorize access > Advanced > Go to Untitled Project (unsafe) > Allow)
+                                    (Authorize access &gt; Advanced &gt; Go to Untitled Project (unsafe) &gt; Allow)
                                 </span>
                             </li>
                             <li>Copy the <strong>Web App URL</strong> and paste it below.</li>
