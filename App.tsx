@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppProvider, useAppContext } from './components/AppContext';
 import ManagerView from './components/ManagerView';
 import CSMView from './components/CSMView';
 import SettingsView from './components/SettingsView';
-import { CogIcon, Button, Modal, Card } from './components/ui';
+import { CogIcon, Button, Modal, Card, CloudIcon, RefreshIcon, CheckCircleIcon } from './components/ui';
 import { AuthenticatedUser } from './types';
 
 const ApiKeyModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
@@ -108,6 +109,43 @@ const Login: React.FC = () => {
     );
 };
 
+const SyncStatus: React.FC = () => {
+    const { isSyncing, hasUnsavedChanges, syncData, isSheetConnected } = useAppContext();
+
+    if (!isSheetConnected) return null;
+
+    if (isSyncing) {
+         return (
+            <div className="flex items-center text-sm text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full">
+                <RefreshIcon className="w-4 h-4 mr-2 animate-spin" />
+                <span className="font-medium">Syncing...</span>
+            </div>
+        );
+    }
+
+    if (hasUnsavedChanges) {
+         return (
+            <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 hidden sm:inline">Unsaved changes</span>
+                <button 
+                    onClick={() => syncData('push')}
+                    className="flex items-center text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-full transition-colors"
+                    title="Click to save immediately"
+                >
+                    <CloudIcon className="w-4 h-4 mr-2" />
+                    <span>Save Now</span>
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-full">
+            <CheckCircleIcon className="w-4 h-4 mr-2" />
+            <span className="font-medium">All Saved</span>
+        </div>
+    );
+};
 
 const Header: React.FC<{
   onLogout: () => void;
@@ -125,7 +163,11 @@ const Header: React.FC<{
     return (
         <header className="bg-white shadow-sm mb-8">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-indigo-600">CSM Task Hub</h1>
+                <div className="flex items-center gap-4">
+                     <h1 className="text-2xl font-bold text-indigo-600">CSM Task Hub</h1>
+                     <SyncStatus />
+                </div>
+               
                 <div className="flex items-center gap-4">
                     <span className="text-sm text-slate-600 hidden sm:block">Welcome, <span className="font-semibold">{currentUser.name}</span></span>
                     {currentUser.role === 'manager' && currentView === 'dashboard' && setCurrentRole && (
@@ -177,7 +219,7 @@ const Header: React.FC<{
 
 
 const AppContent: React.FC = () => {
-    const { currentUser, setCurrentUser, users, apiKey } = useAppContext();
+    const { currentUser, setCurrentUser, users, apiKey, isSheetConnected } = useAppContext();
 
     // State for manager view
     const [currentView, setCurrentView] = useState<'dashboard' | 'settings'>('dashboard');
@@ -216,7 +258,10 @@ const AppContent: React.FC = () => {
             <>
                 <header className="bg-white shadow-sm mb-8">
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                        <h1 className="text-2xl font-bold text-indigo-600">CSM Task Hub</h1>
+                        <div className="flex items-center gap-4">
+                             <h1 className="text-2xl font-bold text-indigo-600">CSM Task Hub</h1>
+                             <SyncStatus />
+                        </div>
                         <div className="flex items-center gap-4">
                             <span className="text-sm text-slate-600">Welcome, <span className="font-semibold">{currentUser.name}</span></span>
                             <Button variant="secondary" onClick={handleLogout}>Logout</Button>

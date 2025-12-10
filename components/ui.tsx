@@ -18,6 +18,8 @@ export const LightBulbIcon = () => <svg xmlns="http://www.w3.org/2000/svg" fill=
 export const LinkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>;
 export const ChevronLeftIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>;
 export const ChevronRightIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>;
+export const CloudIcon = ({ className = "w-6 h-6" }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0 3 3.75m-3-3.75-3 3.75M6 18h12a3 3 0 0 0 3-3 4.5 4.5 0 0 0-4.5-4.5c-1.913 0-3.52.768-4.5 1.92C11.52 10.768 9.913 10 8 10a4.5 4.5 0 0 0-4.5 4.5A3 3 0 0 0 6 18Z" /></svg>;
+export const RefreshIcon = ({ className }: {className?: string}) => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-6 h-6 ${className || ''}`}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>;
 
 
 export const Card: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className }) => (
@@ -29,7 +31,7 @@ export const Card: React.FC<{ children: React.ReactNode, className?: string }> =
 export const Button: React.FC<{
     children: React.ReactNode;
     onClick?: () => void;
-    variant?: 'primary' | 'secondary' | 'danger';
+    variant?: 'primary' | 'secondary' | 'danger' | 'success';
     type?: 'button' | 'submit' | 'reset';
     disabled?: boolean;
     className?: string;
@@ -40,6 +42,7 @@ export const Button: React.FC<{
         primary: 'text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500',
         secondary: 'text-slate-700 bg-slate-100 hover:bg-slate-200 focus:ring-indigo-500 border-slate-300',
         danger: 'text-white bg-red-600 hover:bg-red-700 focus:ring-red-500',
+        success: 'text-white bg-green-600 hover:bg-green-700 focus:ring-green-500',
     };
     return (
         <button type={type} onClick={onClick} disabled={disabled} className={`${baseClasses} ${variantClasses[variant]} ${className}`} title={title}>

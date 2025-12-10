@@ -1,3 +1,4 @@
+
 export enum TaskCategory {
     Announcement = 'Announcement',
     FeatureRelease = 'Feature Release',
@@ -98,4 +99,8 @@ export interface MeetingNote {
     customerId?: string;
     csmId?: string;
     text: string;
+}
+
+export interface GoogleSheetsConfig {
+    webAppUrl: string;
 }
