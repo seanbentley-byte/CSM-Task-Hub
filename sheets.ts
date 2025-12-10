@@ -170,7 +170,10 @@ export class SheetsService {
             method: 'POST',
             mode: 'no-cors', // Important for GAS Web Apps
             headers: {
-                'Content-Type': 'application/json',
+                // 'application/json' is invalid for no-cors mode and causes fetch errors.
+                // Using 'text/plain' prevents CORS preflight requests.
+                // The Apps Script parses the body as JSON regardless of the header.
+                'Content-Type': 'text/plain', 
             },
             body: JSON.stringify(payload)
         });
