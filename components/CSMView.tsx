@@ -258,7 +258,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     if (!entity) return <div className="flex-grow flex items-center justify-center text-slate-500">Select an item to see the agenda.</div>;
 
     return (
-        <div className="flex-grow space-y-4 pb-8 max-h-full overflow-y-auto">
+        <div className="flex-grow space-y-4 pb-8">
             <Card>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Action Items ({incompleteActionItems.length})</h2>
                 <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4">
@@ -457,7 +457,79 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
 };
 
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
-    return <Agenda entityId={csmId} entityType="csm" />;
+    const { customers, users } = useAppContext();
+    const [activeId, setActiveId] = useState<string>(csmId);
+    
+    // Ensure we reset to self if the csmId prop changes
+    useEffect(() => {
+        setActiveId(csmId);
+    }, [csmId]);
+
+    const myCustomers = useMemo(() => 
+        customers.filter(c => c.assignedCsmId === csmId).sort((a,b) => a.name.localeCompare(b.name)), 
+    [customers, csmId]);
+
+    const currentUser = users.find(u => u.id === csmId);
+
+    return (
+        <div className="flex flex-col md:flex-row gap-6 items-start">
+             {/* Sidebar */}
+             <div className="w-full md:w-72 flex-shrink-0 flex flex-col gap-6 sticky top-4">
+                <Card className="p-0 overflow-hidden">
+                    <div className="p-4 bg-indigo-50 border-b border-indigo-100">
+                         <div className="flex items-center gap-3">
+                             <div className="h-10 w-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-lg">
+                                 {currentUser?.name?.charAt(0) || 'U'}
+                             </div>
+                             <div>
+                                 <p className="font-bold text-indigo-900">{currentUser?.name}</p>
+                                 <p className="text-xs text-indigo-600 uppercase tracking-wide font-semibold">CSM</p>
+                             </div>
+                         </div>
+                    </div>
+                    <nav className="p-2">
+                         <button 
+                            onClick={() => setActiveId(csmId)}
+                            className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${activeId === csmId ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
+                         >
+                            <span className="h-5 w-5 flex items-center justify-center"><CheckCircleIcon className={activeId === csmId ? "text-white" : "text-slate-400"} /></span>
+                            My Tasks & Notes
+                         </button>
+                    </nav>
+                </Card>
+
+                <Card className="p-0 flex-grow overflow-hidden flex flex-col">
+                     <div className="p-4 bg-slate-50 border-b border-slate-200">
+                        <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                            <UsersIcon /> My Customers <span className="ml-auto bg-slate-200 text-slate-600 py-0.5 px-2 rounded-full text-xs">{myCustomers.length}</span>
+                        </h3>
+                    </div>
+                    <div className="p-2 overflow-y-auto max-h-[600px] space-y-1">
+                         {myCustomers.map(customer => (
+                            <button
+                                key={customer.id}
+                                onClick={() => setActiveId(customer.id)}
+                                className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeId === customer.id ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
+                            >
+                                {customer.name}
+                            </button>
+                        ))}
+                        {myCustomers.length === 0 && <div className="text-slate-400 text-sm text-center py-4">No customers assigned yet.</div>}
+                    </div>
+                </Card>
+             </div>
+
+             {/* Main Content */}
+             <div className="flex-grow w-full min-w-0">
+                  <div className="mb-4 flex items-center justify-between">
+                        <h2 className="text-2xl font-bold text-slate-800">
+                            {activeId === csmId ? 'My Agenda' : myCustomers.find(c => c.id === activeId)?.name || 'Customer Agenda'}
+                        </h2>
+                  </div>
+                  <Agenda key={activeId} entityId={activeId} entityType={activeId === csmId ? 'csm' : 'customer'} />
+             </div>
+        </div>
+    );
 };
 
 export default CSMView;

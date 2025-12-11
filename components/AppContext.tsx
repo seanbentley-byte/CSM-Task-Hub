@@ -139,6 +139,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [sheetsConfig]);
 
+    // Ensure Hardcoded User Exists
+    useEffect(() => {
+        const hardcodedManager = initialUsers.find(u => u.id === 'csm_1');
+        if (hardcodedManager) {
+            setUsers(prev => {
+                const exists = prev.some(u => u.id === hardcodedManager.id);
+                if (!exists) {
+                    console.log("Restoring hardcoded manager...");
+                    return [hardcodedManager, ...prev];
+                }
+                return prev;
+            });
+        }
+    }, []);
+
     // --- Dirty Checking Effect ---
     // Watches all data arrays. If they change AND we aren't currently syncing (loading data), mark as dirty.
     useEffect(() => {
@@ -173,7 +188,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 // CRITICAL FIX: We remove the ".length > 0" checks here. 
                 // If the sheet returns empty arrays (because data was deleted in the sheet), 
                 // we MUST update the local state to match (i.e., clear the local data).
-                if (data.users) setUsers(data.users);
+                if (data.users) {
+                     // Ensure hardcoded user remains even after sync
+                     const hardcodedManager = initialUsers.find(u => u.id === 'csm_1');
+                     if (hardcodedManager && !data.users.find(u => u.id === hardcodedManager.id)) {
+                         data.users.unshift(hardcodedManager);
+                     }
+                     setUsers(data.users);
+                }
                 if (data.customers) setCustomers(data.customers);
                 if (data.tasks) setTasks(data.tasks);
                 if (data.taskCompletions) setTaskCompletions(data.taskCompletions);

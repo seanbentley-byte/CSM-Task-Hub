@@ -46,6 +46,9 @@ function doPost(e) {
         sheet.clearContents();
         // Write new data
         sheet.getRange(1, 1, values.length, values[0].length).setValues(values);
+      } else {
+        // If empty array sent, clear the sheet
+        sheet.clearContents();
       }
     });
     
@@ -150,6 +153,10 @@ const SettingsView: React.FC = () => {
     };
 
     const handleDeleteUser = (userId: string) => {
+        if (userId === 'csm_1') {
+            alert("The primary Manager account cannot be deleted.");
+            return;
+        }
         if (users.length <= 1) {
             alert("You cannot delete the last user.");
             return;
@@ -354,7 +361,9 @@ const SettingsView: React.FC = () => {
                                 </div>
                                 <div className="flex gap-2">
                                     <Button variant="secondary" onClick={() => handleEditUser(user)} className="p-2" title="Edit User"><PencilIcon/></Button>
-                                    <Button variant="danger" onClick={() => handleDeleteUser(user.id)} className="p-2" title="Delete User"><TrashIcon/></Button>
+                                    {user.id !== 'csm_1' && (
+                                        <Button variant="danger" onClick={() => handleDeleteUser(user.id)} className="p-2" title="Delete User"><TrashIcon/></Button>
+                                    )}
                                 </div>
                             </li>
                         ))}

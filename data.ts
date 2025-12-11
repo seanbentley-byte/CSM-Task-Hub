@@ -1,7 +1,15 @@
 
 import { User, Customer, Task, TaskCategory, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest, MeetingNote } from './types';
 
-export const users: User[] = [];
+export const users: User[] = [
+    {
+        id: 'csm_1',
+        name: 'Sean Bentley',
+        email: 'sean.bentley@pattern.com',
+        password: '5pHtEuQr6vAeDRS',
+        role: 'manager'
+    }
+];
 
 export const customers: Customer[] = [];
 
