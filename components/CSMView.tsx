@@ -38,7 +38,13 @@ const TaskCompletionForm: React.FC<{
 
 
     return (
-        <div className="mt-2 p-3 bg-slate-50 rounded-lg space-y-3">
+        <div className="mt-2 p-4 bg-slate-50 rounded-lg space-y-4 border border-slate-200">
+            {/* Show description in context while editing */}
+            <div className="bg-white p-3 rounded border border-slate-100">
+                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Task Description</h5>
+                <MarkdownRenderer content={task.description} className="text-sm text-slate-700" />
+            </div>
+
             {hasCheckbox && (
                 <div className="flex items-center">
                     <input id={`complete-${task.id}-${customerId || csmId}`} type="checkbox" checked={isCompleted} onChange={e => setIsCompleted(e.target.checked)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
@@ -385,7 +391,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Manager Assigned Tasks</h2>
                 <div className="space-y-4">
                     {managerTasks.map(task => {
-                        const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
+                        const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entity.id));
                         const isEditing = editingTaskId === task.id;
                         const isComplete = completion?.isCompleted || false;
 
@@ -394,9 +400,14 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                                 <div className="flex items-start justify-between">
                                     <div className="flex items-start flex-grow">
                                         {isComplete ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
-                                        <div>
-                                            <p className="font-semibold text-slate-800">{task.title}</p>
-                                            <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
+                                        <div className="flex-grow">
+                                            <p className="font-semibold text-slate-800 text-lg">{task.title}</p>
+                                            
+                                            {/* Description - Made prominent */}
+                                            <div className="mt-2 mb-3">
+                                                <MarkdownRenderer content={task.description} className="text-slate-700 text-base" />
+                                            </div>
+
                                             <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {task.dueDate}</p>
                                             {isComplete && completion && (
                                                 <div className="text-sm mt-1 text-slate-600 italic space-y-1">
