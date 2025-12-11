@@ -96,11 +96,7 @@ const Login: React.FC = () => {
                         {error && <p className="text-red-500 text-sm">{error}</p>}
                         <Button type="submit" className="w-full">Login</Button>
                         <div className="text-sm text-slate-500 bg-slate-100 p-3 rounded-md">
-                            <p><strong>Example Logins:</strong></p>
-                            <ul className="list-disc list-inside">
-                                <li>manager@example.com / password</li>
-                                <li>alice@example.com / password123</li>
-                            </ul>
+                            <p><strong>Please add users in the Manager Dashboard or via Google Sheets.</strong></p>
                         </div>
                     </form>
                 </Card>
@@ -188,7 +184,7 @@ const Header: React.FC<{
                                     onClick={() => setCurrentRole('csm')}
                                     className={`px-3 py-1 text-sm font-semibold rounded ${currentRole === 'csm' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600'}`}
                                 >
-                                    User View
+                                    CSM
                                 </button>
                             </div>
                             {currentRole === 'csm' && setCurrentCsmId && (

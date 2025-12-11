@@ -169,14 +169,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const data = await sheetsService.loadFromSheets(sheetsConfig.webAppUrl);
                 // The updates below will trigger the Dirty Checking Effect.
                 // However, isSyncingRef.current is true, so it will correctly ignore them.
-                if (data.users && data.users.length > 0) setUsers(data.users);
-                if (data.customers && data.customers.length > 0) setCustomers(data.customers);
-                if (data.tasks && data.tasks.length > 0) setTasks(data.tasks);
-                if (data.taskCompletions && data.taskCompletions.length > 0) setTaskCompletions(data.taskCompletions);
-                if (data.actionItems && data.actionItems.length > 0) setActionItems(data.actionItems);
-                if (data.bugReports && data.bugReports.length > 0) setBugReports(data.bugReports);
-                if (data.featureRequests && data.featureRequests.length > 0) setFeatureRequests(data.featureRequests);
-                if (data.meetingNotes && data.meetingNotes.length > 0) setMeetingNotes(data.meetingNotes);
+                
+                // CRITICAL FIX: We remove the ".length > 0" checks here. 
+                // If the sheet returns empty arrays (because data was deleted in the sheet), 
+                // we MUST update the local state to match (i.e., clear the local data).
+                if (data.users) setUsers(data.users);
+                if (data.customers) setCustomers(data.customers);
+                if (data.tasks) setTasks(data.tasks);
+                if (data.taskCompletions) setTaskCompletions(data.taskCompletions);
+                if (data.actionItems) setActionItems(data.actionItems);
+                if (data.bugReports) setBugReports(data.bugReports);
+                if (data.featureRequests) setFeatureRequests(data.featureRequests);
+                if (data.meetingNotes) setMeetingNotes(data.meetingNotes);
+                
                 setHasUnsavedChanges(false);
             }
             setLastSyncTime(Date.now());
@@ -209,7 +214,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [hasUnsavedChanges, isSheetConnected, syncData]);
 
     // --- Auto-Load Interval ---
-    // Checks every 1 minute (was 5). Only pulls if NO unsaved changes locally.
+    // Checks every 1 minute. Only pulls if NO unsaved changes locally.
     useEffect(() => {
         if (!isSheetConnected) return;
         

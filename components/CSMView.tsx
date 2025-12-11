@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon } from './ui';
+import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon, MarkdownRenderer } from './ui';
 import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
@@ -396,6 +396,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                                         {isComplete ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
                                         <div>
                                             <p className="font-semibold text-slate-800">{task.title}</p>
+                                            <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
                                             <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {task.dueDate}</p>
                                             {isComplete && completion && (
                                                 <div className="text-sm mt-1 text-slate-600 italic space-y-1">
@@ -444,153 +445,8 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     );
 };
 
-
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
-    const { customers, users, tasks, taskCompletions } = useAppContext();
-    const [selectedViewId, setSelectedViewId] = useState<string>(csmId);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isCustomerListCollapsed, setIsCustomerListCollapsed] = useState(false);
-
-    const csm = users.find(c => c.id === csmId);
-
-    const incompleteTaskCounts = useMemo(() => {
-        const counts = new Map<string, number>();
-        customers.forEach(customer => {
-            const assignedTasks = tasks.filter(t => !t.isArchived && t.assignmentType === 'customer' && t.assignedCustomerIds.includes(customer.id));
-            
-            let incompleteCount = 0;
-            assignedTasks.forEach(task => {
-                const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.customerId === customer.id);
-                if (!completion || !completion.isCompleted) {
-                    incompleteCount++;
-                }
-            });
-            counts.set(customer.id, incompleteCount);
-        });
-        return counts;
-    }, [customers, tasks, taskCompletions]);
-
-    const myTasksIncompleteCount = useMemo(() => {
-        const myTasks = tasks.filter(t => !t.isArchived && t.assignmentType === 'csm' && t.assignedCsmIds?.includes(csmId));
-        let incompleteCount = 0;
-        myTasks.forEach(task => {
-            const completion = taskCompletions.find(tc => tc.taskId === task.id && tc.csmId === csmId);
-            if (!completion || !completion.isCompleted) {
-                incompleteCount++;
-            }
-        });
-        return incompleteCount;
-    }, [tasks, taskCompletions, csmId]);
-    
-    const csmCustomers = useMemo(() => 
-        customers
-            .filter(c => c.assignedCsmId === csmId)
-            .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    , [customers, csmId, searchQuery]);
-
-    useEffect(() => {
-        // When switching CSMs, reset the view to the new CSM's personal agenda
-        setSelectedViewId(csmId);
-    }, [csmId]);
-
-    useEffect(() => {
-        // If the selected customer is filtered out, don't change the view automatically.
-        // Let the user decide what to select next. If the list becomes empty, they see a message.
-    }, [csmCustomers, selectedViewId]);
-    
-    const selectedCustomer = useMemo(() => customers.find(c => c.id === selectedViewId), [customers, selectedViewId]);
-
-    if (!csm) {
-        return <div className="text-center text-slate-500">Please select a CSM to view their agenda.</div>;
-    }
-
-    const getTitle = () => {
-        if (selectedViewId === csmId) return `My Agenda: ${csm.name}`;
-        if (selectedCustomer) return `${selectedCustomer.name} Agenda`;
-        return `CSM Agenda: ${csm.name}`;
-    }
-
-    return (
-        <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-6">{getTitle()}</h1>
-            <div className="flex flex-col md:flex-row gap-6 md:h-[calc(100vh-200px)]">
-                {/* Left Column: Customer List */}
-                <div className={`
-                    flex-shrink-0 transition-all duration-300 ease-in-out
-                    ${isCustomerListCollapsed ? 'md:w-0' : 'md:w-1/3 lg:w-1/4'}
-                `}>
-                    <div className="h-full w-full overflow-hidden">
-                        <Card className="h-full flex flex-col">
-                             <div className="relative mb-4">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon/></span>
-                                <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search customers..." className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md" />
-                            </div>
-                            <h2 className="text-lg font-semibold text-slate-700 mb-2">My Tasks</h2>
-                             <div className="border-b mb-2 pb-2">
-                                <button
-                                    onClick={() => setSelectedViewId(csmId)}
-                                    className={`w-full text-left p-3 rounded-md transition-colors flex justify-between items-center ${selectedViewId === csmId ? 'bg-indigo-100 text-indigo-800 font-semibold' : 'hover:bg-slate-100'}`}
-                                >
-                                    <span>{csm.name}</span>
-                                    {myTasksIncompleteCount > 0 && (
-                                        <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                                            {myTasksIncompleteCount}
-                                        </span>
-                                    )}
-                                </button>
-                            </div>
-                            <h2 className="text-lg font-semibold text-slate-700 mb-2">My Customers ({csmCustomers.length})</h2>
-                            <div className="flex-grow overflow-y-auto -mr-2 pr-2">
-                                <div className="space-y-2">
-                                    {csmCustomers.map(customer => {
-                                        const incompleteCount = incompleteTaskCounts.get(customer.id) || 0;
-                                        return (
-                                            <button 
-                                                key={customer.id} 
-                                                onClick={() => setSelectedViewId(customer.id)}
-                                                className={`w-full text-left p-3 rounded-md transition-colors flex justify-between items-center ${selectedViewId === customer.id ? 'bg-indigo-100 text-indigo-800 font-semibold' : 'hover:bg-slate-100'}`}
-                                            >
-                                                <span>{customer.name}</span>
-                                                {incompleteCount > 0 && (
-                                                    <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                                                        {incompleteCount}
-                                                    </span>
-                                                )}
-                                            </button>
-                                        )
-                                    })}
-                                    {searchQuery && csmCustomers.length === 0 && <p className="text-slate-500 text-sm p-2">No customers found.</p>}
-                                </div>
-                            </div>
-                        </Card>
-                    </div>
-                </div>
-
-                {/* Right Column: Customer Agenda */}
-                <div className="flex-grow relative">
-                     <button 
-                        onClick={() => setIsCustomerListCollapsed(!isCustomerListCollapsed)}
-                        className="absolute top-1/2 -left-5 z-10 bg-white rounded-full p-1 shadow-md border border-slate-200 hover:bg-slate-100 transform -translate-y-1/2 hidden md:block"
-                        title={isCustomerListCollapsed ? 'Show Customers' : 'Hide Customers'}
-                    >
-                        {isCustomerListCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-                    </button>
-                    {selectedViewId ? (
-                        <Agenda 
-                            entityId={selectedViewId} 
-                            entityType={selectedViewId === csmId ? 'csm' : 'customer'} 
-                        />
-                    ) : (
-                        <div className="h-full flex items-center justify-center bg-white rounded-lg shadow-sm">
-                            <p className="text-slate-500">
-                                {csmCustomers.length > 0 ? "Select a customer to view their agenda." : "You have no assigned customers."}
-                            </p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
+    return <Agenda entityId={csmId} entityType="csm" />;
 };
 
 export default CSMView;
