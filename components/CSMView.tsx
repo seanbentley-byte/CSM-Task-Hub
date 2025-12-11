@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from './AppContext';
-import { Card, Button, CheckCircleIcon, MarkdownRenderer, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon } from './ui';
+import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon } from './ui';
 import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest } from '../types';
 import { GoogleGenAI } from '@google/genai';
 

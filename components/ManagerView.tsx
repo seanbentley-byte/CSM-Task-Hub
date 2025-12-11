@@ -54,7 +54,7 @@ const AITaskModal: React.FC<{
                 },
             });
 
-            const generatedData = JSON.parse(response.text);
+            const generatedData = JSON.parse(response.text || '{}');
             onTaskGenerated(generatedData);
             onClose();
 
