@@ -5,6 +5,15 @@ import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, Bug
 import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
+const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    // Expecting YYYY-MM-DD from HTML date input
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+         return `${parts[1]}/${parts[2]}/${parts[0]}`;
+    }
+    return dateStr;
+};
 
 const TaskCompletionForm: React.FC<{
     task: Task;
@@ -461,7 +470,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                                                 <MarkdownRenderer content={task.description} className="text-slate-700 text-base" />
                                             </div>
 
-                                            <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {task.dueDate}</p>
+                                            <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {formatDate(task.dueDate)}</p>
                                             {isComplete && completion && (
                                                 <div className="text-sm mt-1 text-slate-600 italic space-y-1">
                                                     {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: "{completion.notes}"</p>}
