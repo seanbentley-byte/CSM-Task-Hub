@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon, MarkdownRenderer } from './ui';
 import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest } from '../types';
@@ -100,6 +100,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     // Notes
     const [currentNotes, setCurrentNotes] = useState('');
     const [isSummarizing, setIsSummarizing] = useState(false);
+    const [isSavingNotes, setIsSavingNotes] = useState(false);
     
     // Action Items
     const [newActionItem, setNewActionItem] = useState('');
@@ -111,13 +112,40 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
 
     // Feature Requests
     const [newFeatureRequest, setNewFeatureRequest] = useState('');
+    const [newFeatureLink, setNewFeatureLink] = useState('');
     
+    // Load Notes when Entity Changes
     useEffect(() => {
         const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
         setCurrentNotes(note?.text || '');
         setEditingTaskId(null); // Reset editing state when entity changes
-    }, [entityId, meetingNotes, isCsmView]);
+    }, [entityId, isCsmView, meetingNotes]); // Note: meetingNotes in dependency might cause reload while typing if not careful, but the debouncer below handles the write-back
     
+    // Auto-Save Notes Effect
+    useEffect(() => {
+        const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
+        
+        // Only save if dirty and different from saved
+        if (currentNotes !== (note?.text || '')) {
+             setIsSavingNotes(true);
+             const timer = setTimeout(() => {
+                setMeetingNotes(prev => {
+                    const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
+                    if (existing) {
+                        return prev.map(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId) ? { ...n, text: currentNotes } : n);
+                    }
+                    return [...prev, { customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, text: currentNotes }];
+                });
+                setIsSavingNotes(false);
+            }, 1000); // 1 second debounce
+
+            return () => clearTimeout(timer);
+        } else {
+            setIsSavingNotes(false);
+        }
+    }, [currentNotes, entityId, isCsmView]);
+
+
     const entity = isCsmView ? users.find(c => c.id === entityId) : customers.find(c => c.id === entityId);
     
     // Filter all data for the selected entity
@@ -131,17 +159,6 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
         return !t.isArchived && t.assignmentType === 'customer' && t.assignedCustomerIds.includes(entityId)
     }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, entityId, isCsmView]);
 
-    // Notes Handlers
-    const handleSaveNotes = () => {
-        setMeetingNotes(prev => {
-            const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
-            if (existing) {
-                return prev.map(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId) ? { ...n, text: currentNotes } : n);
-            }
-            return [...prev, { customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, text: currentNotes }];
-        });
-    };
-
     const handleSummarizeNotes = async () => {
         if (!currentNotes || !apiKey) return;
         setIsSummarizing(true);
@@ -151,7 +168,17 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                 model: 'gemini-2.5-flash',
                 contents: `Summarize the following notes into key bullet points and identify any action items: \n\n${currentNotes}`,
             });
-            setCurrentNotes(prev => `${prev}\n\n**AI Summary:**\n${response.text}`);
+            const newText = `${currentNotes}\n\n**AI Summary:**\n${response.text}`;
+            setCurrentNotes(newText); 
+            // Trigger immediate save for summary
+            setMeetingNotes(prev => {
+                const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
+                if (existing) {
+                    return prev.map(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId) ? { ...n, text: newText } : n);
+                }
+                return [...prev, { customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, text: newText }];
+            });
+
         } catch (error) {
             console.error("Failed to summarize notes:", error);
             alert("Failed to summarize notes. Please check your API key in settings.");
@@ -207,6 +234,12 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     const handleCompleteBug = (id: string) => {
         setBugReports(prev => prev.map(b => b.id === id ? { ...b, isCompleted: true, completedAt: Date.now() } : b));
     };
+
+    const handleDeleteBug = (id: string) => {
+         if(window.confirm('Are you sure you want to delete this bug report?')) {
+            setBugReports(prev => prev.filter(b => b.id !== id));
+        }
+    };
     
     // Feature Request Handlers
      const handleAddFeatureRequest = (e: React.FormEvent) => {
@@ -217,15 +250,23 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
             customerId: isCsmView ? undefined : entityId,
             csmId: isCsmView ? entityId : undefined,
             text: newFeatureRequest.trim(),
+            ticketLink: newFeatureLink.trim(),
             isCompleted: false,
             createdAt: Date.now()
         };
         setFeatureRequests(prev => [newRequest, ...prev]);
         setNewFeatureRequest('');
+        setNewFeatureLink('');
     };
 
     const handleCompleteFeatureRequest = (id: string) => {
         setFeatureRequests(prev => prev.map(fr => fr.id === id ? { ...fr, isCompleted: true, completedAt: Date.now() } : fr));
+    };
+
+    const handleDeleteFeatureRequest = (id: string) => {
+        if(window.confirm('Are you sure you want to delete this feature request?')) {
+            setFeatureRequests(prev => prev.filter(fr => fr.id !== id));
+        }
     };
 
 
@@ -307,18 +348,21 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                     <form onSubmit={handleAddBug} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
                         <input type="text" value={newBugName} onChange={e => setNewBugName(e.target.value)} placeholder="Bug name or description..." className="p-2 border rounded-md" required />
                         <div className="flex gap-2">
-                            <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Link to ticket (e.g., ClickUp)..." className="flex-grow p-2 border rounded-md" />
+                            <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Link to ticket..." className="flex-grow p-2 border rounded-md" />
                             <Button type="submit">Add Bug</Button>
                         </div>
                     </form>
                     <div className="space-y-2">
                         {openBugs.map(bug => (
-                            <div key={bug.id} className="flex justify-between items-center p-2">
+                            <div key={bug.id} className="flex justify-between items-center p-2 group">
                                 <div>
                                     <p>{bug.name}</p>
                                     {bug.ticketLink && <a href={bug.ticketLink} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline flex items-center gap-1"><LinkIcon />Ticket</a>}
                                 </div>
-                                <Button variant="secondary" onClick={() => handleCompleteBug(bug.id)}>Complete</Button>
+                                <div className="flex gap-2 items-center">
+                                    <Button variant="secondary" onClick={() => handleCompleteBug(bug.id)}>Complete</Button>
+                                    <button onClick={() => handleDeleteBug(bug.id)} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
+                                </div>
                             </div>
                         ))}
                         {openBugs.length === 0 && <p className="text-slate-500 text-sm">No open bugs.</p>}
@@ -352,15 +396,24 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                     <ChevronDownIcon className="transition-transform transform details-open:-rotate-180" />
                 </summary>
                 <div className="p-6 pt-0">
-                    <form onSubmit={handleAddFeatureRequest} className="flex gap-2 mb-4">
-                        <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="Add a new feature request..." className="flex-grow p-2 border rounded-md" />
-                        <Button type="submit">Add Request</Button>
+                    <form onSubmit={handleAddFeatureRequest} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                         <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="Add a new feature request..." className="p-2 border rounded-md" required />
+                        <div className="flex gap-2">
+                            <input type="text" value={newFeatureLink} onChange={e => setNewFeatureLink(e.target.value)} placeholder="Link to request (optional)..." className="flex-grow p-2 border rounded-md" />
+                            <Button type="submit">Add Request</Button>
+                        </div>
                     </form>
                     <div className="space-y-2">
                         {openFeatures.map(fr => (
-                            <div key={fr.id} className="flex justify-between items-center p-2">
-                                <p>{fr.text}</p>
-                                <Button variant="secondary" onClick={() => handleCompleteFeatureRequest(fr.id)}>Complete</Button>
+                            <div key={fr.id} className="flex justify-between items-center p-2 group">
+                                 <div>
+                                    <p>{fr.text}</p>
+                                    {fr.ticketLink && <a href={fr.ticketLink} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline flex items-center gap-1"><LinkIcon />Ticket</a>}
+                                </div>
+                                <div className="flex gap-2 items-center">
+                                     <Button variant="secondary" onClick={() => handleCompleteFeatureRequest(fr.id)}>Complete</Button>
+                                     <button onClick={() => handleDeleteFeatureRequest(fr.id)} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
+                                </div>
                             </div>
                         ))}
                         {openFeatures.length === 0 && <p className="text-slate-500 text-sm">No open feature requests.</p>}
@@ -443,10 +496,12 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
             </Card>
 
             <Card>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">{isCsmView ? 'Personal Notes' : 'Meeting Notes'}</h2>
-                 <textarea value={currentNotes} onChange={e => setCurrentNotes(e.target.value)} rows={6} className="w-full p-2 border rounded-md" placeholder="Start typing notes..."></textarea>
+                <div className="flex justify-between items-center mb-2">
+                     <h2 className="text-xl font-bold text-slate-800">{isCsmView ? 'Personal Notes' : 'Notes'}</h2>
+                     {isSavingNotes && <span className="text-xs text-slate-500 animate-pulse">Saving...</span>}
+                </div>
+                 <textarea value={currentNotes} onChange={e => setCurrentNotes(e.target.value)} rows={6} className="w-full p-2 border rounded-md" placeholder="Start typing notes... (Auto-saves)"></textarea>
                  <div className="flex justify-end gap-2 mt-2">
-                    <Button variant="secondary" onClick={handleSaveNotes}>Save Notes</Button>
                     <Button onClick={handleSummarizeNotes} disabled={isSummarizing || !apiKey}>
                         <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
                     </Button>
@@ -459,6 +514,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const { customers, users } = useAppContext();
     const [activeId, setActiveId] = useState<string>(csmId);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     
     // Ensure we reset to self if the csmId prop changes
     useEffect(() => {
@@ -472,49 +528,71 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const currentUser = users.find(u => u.id === csmId);
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 items-start">
+        <div className="flex flex-col md:flex-row gap-6 items-start h-[calc(100vh-100px)]">
              {/* Sidebar */}
-             <div className="w-full md:w-72 flex-shrink-0 flex flex-col gap-6 sticky top-4">
-                <Card className="p-0 overflow-hidden">
-                    <div className="p-4 bg-indigo-50 border-b border-indigo-100">
-                         <div className="flex items-center gap-3">
-                             <div className="h-10 w-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-lg">
-                                 {currentUser?.name?.charAt(0) || 'U'}
+             <div className={`flex-shrink-0 flex flex-col gap-6 sticky top-4 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-full md:w-72'}`}>
+                <Card className="p-0 overflow-hidden flex flex-col h-full max-h-[85vh]">
+                    <div className="p-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+                         {!isSidebarCollapsed && (
+                             <div className="flex items-center gap-3">
+                                 <div className="h-10 w-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-lg flex-shrink-0">
+                                     {currentUser?.name?.charAt(0) || 'U'}
+                                 </div>
+                                 <div className="overflow-hidden">
+                                     <p className="font-bold text-indigo-900 truncate">{currentUser?.name}</p>
+                                     <p className="text-xs text-indigo-600 uppercase tracking-wide font-semibold">CSM</p>
+                                 </div>
                              </div>
-                             <div>
-                                 <p className="font-bold text-indigo-900">{currentUser?.name}</p>
-                                 <p className="text-xs text-indigo-600 uppercase tracking-wide font-semibold">CSM</p>
-                             </div>
-                         </div>
-                    </div>
-                    <nav className="p-2">
+                         )}
                          <button 
-                            onClick={() => setActiveId(csmId)}
-                            className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${activeId === csmId ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
-                         >
-                            <span className="h-5 w-5 flex items-center justify-center"><CheckCircleIcon className={activeId === csmId ? "text-white" : "text-slate-400"} /></span>
-                            My Tasks & Notes
+                            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                            className="p-1 rounded hover:bg-indigo-100 text-indigo-600"
+                            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                        >
+                            {isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                          </button>
-                    </nav>
-                </Card>
-
-                <Card className="p-0 flex-grow overflow-hidden flex flex-col">
-                     <div className="p-4 bg-slate-50 border-b border-slate-200">
-                        <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                            <UsersIcon /> My Customers <span className="ml-auto bg-slate-200 text-slate-600 py-0.5 px-2 rounded-full text-xs">{myCustomers.length}</span>
-                        </h3>
                     </div>
-                    <div className="p-2 overflow-y-auto max-h-[600px] space-y-1">
-                         {myCustomers.map(customer => (
-                            <button
-                                key={customer.id}
-                                onClick={() => setActiveId(customer.id)}
-                                className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeId === customer.id ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
-                            >
-                                {customer.name}
-                            </button>
-                        ))}
-                        {myCustomers.length === 0 && <div className="text-slate-400 text-sm text-center py-4">No customers assigned yet.</div>}
+                    
+                    <div className="flex-grow flex flex-col overflow-hidden">
+                        <nav className="p-2 border-b border-slate-100">
+                             <button 
+                                onClick={() => setActiveId(csmId)}
+                                className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${activeId === csmId ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
+                                title={isSidebarCollapsed ? "My Tasks & Notes" : ""}
+                             >
+                                <span className="h-5 w-5 flex items-center justify-center flex-shrink-0"><CheckCircleIcon className={activeId === csmId ? "text-white" : "text-slate-400"} /></span>
+                                {!isSidebarCollapsed && <span>My Tasks & Notes</span>}
+                             </button>
+                        </nav>
+
+                         <div className="p-4 bg-slate-50 border-b border-slate-200">
+                            {isSidebarCollapsed ? (
+                                <div className="flex justify-center"><UsersIcon /></div>
+                            ) : (
+                                <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                                    <UsersIcon /> My Customers <span className="ml-auto bg-slate-200 text-slate-600 py-0.5 px-2 rounded-full text-xs">{myCustomers.length}</span>
+                                </h3>
+                            )}
+                        </div>
+                        <div className="p-2 overflow-y-auto flex-grow space-y-1">
+                             {myCustomers.map(customer => (
+                                <button
+                                    key={customer.id}
+                                    onClick={() => setActiveId(customer.id)}
+                                    className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeId === customer.id ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
+                                    title={isSidebarCollapsed ? customer.name : ""}
+                                >
+                                    {isSidebarCollapsed ? (
+                                        <div className="h-6 w-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold mx-auto">
+                                            {customer.name.charAt(0)}
+                                        </div>
+                                    ) : (
+                                        customer.name
+                                    )}
+                                </button>
+                            ))}
+                            {!isSidebarCollapsed && myCustomers.length === 0 && <div className="text-slate-400 text-sm text-center py-4">No customers assigned yet.</div>}
+                        </div>
                     </div>
                 </Card>
              </div>

@@ -119,15 +119,15 @@ export class SheetsService {
     // Feature Requests
     featuresToRows = (reqs: FeatureRequest[]) => {
         const rows = reqs.map(f => [
-            f.id, f.customerId || '', f.csmId || '', f.text, f.isCompleted, f.completedAt || '', f.createdAt
+            f.id, f.customerId || '', f.csmId || '', f.text, f.isCompleted, f.completedAt || '', f.createdAt, f.ticketLink || ''
         ]);
-        return [['ID', 'Customer ID', 'CSM ID', 'Text', 'Is Completed', 'Completed At', 'Created At'], ...rows];
+        return [['ID', 'Customer ID', 'CSM ID', 'Text', 'Is Completed', 'Completed At', 'Created At', 'Ticket Link'], ...rows];
     }
     rowsToFeatures = (rows: any[][]): FeatureRequest[] => {
         if (!rows || rows.length < 2) return [];
         return rows.slice(1).map(r => ({
             id: r[0], customerId: r[1] || undefined, csmId: r[2] || undefined, text: r[3],
-            isCompleted: r[4] === 'TRUE' || r[4] === true, completedAt: r[5] ? Number(r[5]) : undefined, createdAt: Number(r[6])
+            isCompleted: r[4] === 'TRUE' || r[4] === true, completedAt: r[5] ? Number(r[5]) : undefined, createdAt: Number(r[6]), ticketLink: r[7] || ''
         }));
     }
 

@@ -90,6 +90,7 @@ export interface FeatureRequest {
     customerId?: string;
     csmId?: string;
     text: string;
+    ticketLink?: string;
     isCompleted: boolean;
     completedAt?: number;
     createdAt: number;
