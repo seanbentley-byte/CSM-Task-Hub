@@ -98,7 +98,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const stored = localStorage.getItem('sheetsConfig');
         return stored ? JSON.parse(stored) : DEFAULT_SHEETS_CONFIG;
     });
-    const [isSheetConnected, setIsSheetConnected] = useState(false);
+    
+    // Initialize connected state based on config existence immediately to prevent race conditions
+    const [isSheetConnected, setIsSheetConnected] = useState(() => {
+        const stored = localStorage.getItem('sheetsConfig');
+        const config = stored ? JSON.parse(stored) : DEFAULT_SHEETS_CONFIG;
+        return !!(config && config.webAppUrl);
+    });
     
     // Sync State
     const [isSyncing, setIsSyncingState] = useState(false);
@@ -106,6 +112,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const lastChangeTimeRef = useRef<number>(Date.now());
+    const isFirstRender = useRef(true);
 
     const setIsSyncing = (val: boolean) => {
         isSyncingRef.current = val;
@@ -153,20 +160,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             });
         }
     }, []);
-
-    // --- Dirty Checking Effect ---
-    // Watches all data arrays. If they change AND we aren't currently syncing (loading data), mark as dirty.
-    useEffect(() => {
-        if (!isSheetConnected) return;
-        
-        // If the change was triggered by a sync operation, ignore it.
-        if (isSyncingRef.current) return;
-
-        setHasUnsavedChanges(true);
-        lastChangeTimeRef.current = Date.now();
-
-    }, [tasks, customers, users, taskCompletions, actionItems, bugReports, featureRequests, meetingNotes, isSheetConnected]);
-
+    
 
     // --- Sync Logic ---
     const syncData = useCallback(async (direction: 'push' | 'pull') => {
@@ -182,12 +176,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setHasUnsavedChanges(false);
             } else {
                 const data = await sheetsService.loadFromSheets(sheetsConfig.webAppUrl);
-                // The updates below will trigger the Dirty Checking Effect.
-                // However, isSyncingRef.current is true, so it will correctly ignore them.
                 
-                // CRITICAL FIX: We remove the ".length > 0" checks here. 
-                // If the sheet returns empty arrays (because data was deleted in the sheet), 
-                // we MUST update the local state to match (i.e., clear the local data).
+                // We update state here. The Dirty Checking Effect will run after these updates.
+                // Because isSyncingRef.current is true, it will ignore these updates.
+                
                 if (data.users) {
                      // Ensure hardcoded user remains even after sync
                      const hardcodedManager = initialUsers.find(u => u.id === 'csm_1');
@@ -217,6 +209,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setIsSyncing(false);
         }
     }, [sheetsConfig, isSheetConnected, users, customers, tasks, taskCompletions, actionItems, bugReports, featureRequests, meetingNotes]);
+
+
+    // --- Initial Load Effect ---
+    // Runs when connection is established and we haven't synced yet (e.g., on app load)
+    useEffect(() => {
+        if (isSheetConnected && !lastSyncTime) {
+            console.log("Initial load from Sheet...");
+            syncData('pull');
+        }
+    }, [isSheetConnected, lastSyncTime, syncData]);
+
+
+    // --- Dirty Checking Effect ---
+    // Watches all data arrays. If they change AND we aren't currently syncing (loading data), mark as dirty.
+    useEffect(() => {
+        // Prevent marking dirty on initial render
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+
+        if (!isSheetConnected) return;
+        
+        // If the change was triggered by a sync operation, ignore it.
+        if (isSyncingRef.current) return;
+
+        setHasUnsavedChanges(true);
+        lastChangeTimeRef.current = Date.now();
+
+    }, [tasks, customers, users, taskCompletions, actionItems, bugReports, featureRequests, meetingNotes, isSheetConnected]);
+
 
     // --- Auto-Save Interval ---
     // Checks every 5 seconds. If dirty and last change was > 10 seconds ago, save.
