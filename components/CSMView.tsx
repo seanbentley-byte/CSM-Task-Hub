@@ -106,7 +106,7 @@ const BugReportRow: React.FC<{
             onUpdate(item.id, { name: name.trim(), ticketLink: link.trim() });
         } else {
             setName(item.name);
-            setLink(item.ticketLink);
+            setLink(item.ticketLink ?? '');
         }
         setIsEditing(false);
     };
@@ -208,7 +208,7 @@ const FeatureRequestRow: React.FC<{
             onUpdate(item.id, { text: text.trim(), ticketLink: link.trim() });
         } else {
             setText(item.text);
-            setLink(item.ticketLink);
+            setLink(item.ticketLink ?? '');
         }
         setIsEditing(false);
     };
