@@ -42,6 +42,12 @@ const parseDateFromSheet = (val: string | number | undefined) => {
     return isNaN(parsed) ? 0 : parsed;
 }
 
+const cleanDateString = (val: any) => {
+    if (!val) return '';
+    const s = String(val);
+    return s.split('T')[0];
+}
+
 export class SheetsService {
 
     constructor() {}
@@ -82,7 +88,7 @@ export class SheetsService {
     rowsToTasks = (rows: any[][]): Task[] => {
         if (!rows || rows.length < 2) return [];
         return rows.slice(1).map(r => ({
-            id: r[0], title: r[1], description: r[2], dueDate: r[3], category: r[4],
+            id: r[0], title: r[1], description: r[2], dueDate: cleanDateString(r[3]), category: r[4],
             csmInputTypes: jsonParse(r[5]) || [], assignmentType: r[6],
             assignedCustomerIds: jsonParse(r[7]) || [], assignedCsmIds: jsonParse(r[8]),
             multiSelectOptions: jsonParse(r[9]), isArchived: r[10] === 'TRUE' || r[10] === true, createdAt: parseDateFromSheet(r[11]) || 0

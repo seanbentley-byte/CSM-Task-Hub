@@ -5,6 +5,24 @@ import { useAppContext } from './AppContext';
 import { Card, Button, Modal, Tag, PlusIcon, ArchiveIcon, ChevronDownIcon, CheckCircleIcon, UsersIcon, PencilIcon, SearchIcon, TrashIcon, DownloadIcon, MarkdownRenderer, SparklesIcon } from './ui';
 import { GoogleGenAI, Type } from '@google/genai';
 
+// Date Formatter Helper (copied from CSMView for consistency)
+const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    
+    // Handle ISO strings by stripping time first
+    let cleanDateStr = dateStr;
+    if (dateStr.includes('T')) {
+        cleanDateStr = dateStr.split('T')[0];
+    }
+
+    // Expecting YYYY-MM-DD
+    const parts = cleanDateStr.split('-');
+    if (parts.length === 3) {
+         return `${parts[1]}/${parts[2]}/${parts[0]}`;
+    }
+    return cleanDateStr;
+};
+
 interface AIGeneratedTaskData {
     title: string;
     description: string;
@@ -120,7 +138,11 @@ const TaskFormModal: React.FC<{
             const data = editingTask || initialData;
             setTitle(data?.title || '');
             setDescription(data?.description || '');
-            setDueDate(editingTask?.dueDate || '');
+            
+            // Clean due date if it comes from ISO string (Sheets sync fix)
+            const rawDueDate = editingTask?.dueDate || '';
+            setDueDate(rawDueDate.includes('T') ? rawDueDate.split('T')[0] : rawDueDate);
+
             setCategory(data?.category || TaskCategory.Other);
             setCsmInputTypes(data?.csmInputTypes || [CSMInputType.Checkbox]);
             setMultiSelectOptionsStr(editingTask?.multiSelectOptions?.map(o => o.label).join(', ') || '');
@@ -709,7 +731,7 @@ const ManagerView: React.FC = () => {
                                         </div>
                                         <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
                                         <div className="flex items-center gap-4 text-sm mt-2 text-slate-600">
-                                            <span className={`font-semibold ${isOverdue(task.dueDate) && completionPercent < 100 ? 'text-red-500' : ''}`}>Due: {task.dueDate}</span>
+                                            <span className={`font-semibold ${isOverdue(task.dueDate) && completionPercent < 100 ? 'text-red-500' : ''}`}>Due: {formatDate(task.dueDate)}</span>
                                             <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignmentType === 'csm' ? `${task.assignedCsmIds?.length || 0} Users` : `${task.assignedCustomerIds.length} Customers`}</span></span>
                                         </div>
                                     </div>

@@ -7,12 +7,19 @@ import { GoogleGenAI } from '@google/genai';
 
 const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
-    // Expecting YYYY-MM-DD from HTML date input
-    const parts = dateStr.split('-');
+    
+    // Handle ISO strings by stripping time first
+    let cleanDateStr = dateStr;
+    if (dateStr.includes('T')) {
+        cleanDateStr = dateStr.split('T')[0];
+    }
+
+    // Expecting YYYY-MM-DD
+    const parts = cleanDateStr.split('-');
     if (parts.length === 3) {
          return `${parts[1]}/${parts[2]}/${parts[0]}`;
     }
-    return dateStr;
+    return cleanDateStr;
 };
 
 const formatDateTime = (timestamp: number | undefined) => {
@@ -21,9 +28,8 @@ const formatDateTime = (timestamp: number | undefined) => {
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     const yyyy = date.getFullYear();
-    const HH = String(date.getHours()).padStart(2, '0');
-    const MM = String(date.getMinutes()).padStart(2, '0');
-    return `${mm}/${dd}/${yyyy} ${HH}:${MM}`;
+    // Removed time components as requested
+    return `${mm}/${dd}/${yyyy}`;
 };
 
 // --- Helper Components for Editable Rows ---
