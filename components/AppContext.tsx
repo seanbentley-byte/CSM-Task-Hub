@@ -258,20 +258,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return () => clearInterval(interval);
     }, [hasUnsavedChanges, isSheetConnected, syncData]);
 
-    // --- Auto-Load Interval ---
-    // Checks every 1 minute. Only pulls if NO unsaved changes locally.
-    useEffect(() => {
-        if (!isSheetConnected) return;
-        
-        const interval = setInterval(() => {
-             if (!hasUnsavedChanges && !isSyncingRef.current) {
-                 console.log('Auto-pulling...');
-                 syncData('pull');
-             }
-        }, 60 * 1000); // 1 minute
-
-        return () => clearInterval(interval);
-    }, [hasUnsavedChanges, isSheetConnected, syncData]);
+    // Removed Auto-Load Interval to prevent data overwrites and improve performance.
+    // Sync will now only happen on initial load, manual trigger, or push (save).
 
     const value = {
         tasks, setTasks,

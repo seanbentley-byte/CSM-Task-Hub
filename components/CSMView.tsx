@@ -406,6 +406,9 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const [isSummarizing, setIsSummarizing] = useState(false);
     const [isSavingNotes, setIsSavingNotes] = useState(false);
     
+    // Track the last version we pushed to context to avoid overwriting user typing with our own echo
+    const lastSavedNotesRef = useRef('');
+
     // Action Items
     const [newActionItem, setNewActionItem] = useState('');
 
@@ -418,23 +421,72 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const [newFeatureRequest, setNewFeatureRequest] = useState('');
     const [newFeatureLink, setNewFeatureLink] = useState('');
     
-    // Load Notes when Entity Changes
+    // Load Notes when Entity Changes or External Updates occur
     useEffect(() => {
         const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
-        setCurrentNotes(note?.text || '');
-        setEditingTaskId(null); // Reset editing state when entity changes
-    }, [entityId, isCsmView, meetingNotes]); // Note: meetingNotes in dependency might cause reload while typing if not careful, but the debouncer below handles the write-back
+        const remoteText = note?.text || '';
+        
+        // Logic to prevent overwriting user's work with the echo of their own save:
+        // 1. If we just changed entities, always load.
+        // 2. If we are on the same entity, only update IF the remote text is different from what we last saved.
+        //    (This handles external updates from other users/tabs, but ignores our own saved loopback)
+        
+        // Note: We don't have a reliable way to know if 'entityId' just changed inside this specific effect execution 
+        // without another ref, but we can check if remoteText is different from *current* text too? No, current text is being typed.
+        
+        // Simplified approach: Since we track `lastSavedNotesRef`, if remoteText === lastSavedNotesRef, 
+        // it implies the update coming in is just what we pushed.
+        
+        // HOWEVER, when switching entities, `lastSavedNotesRef` is stale (from previous entity).
+        // So we need to reset it.
+        // We'll use a separate effect for entity switching.
+        
+        // But we can't split easily because both depend on meetingNotes/entityId.
+        
+        // Let's use a ref to track current entity ID to detect switch.
+        // See 'Entity Switch Effect' below.
+    }, [meetingNotes, entityId, isCsmView]);
+    
+    const prevEntityIdRef = useRef(entityId);
+
+    // Entity Switch Effect: Reset state when switching customers/CSMs
+    useEffect(() => {
+        if (prevEntityIdRef.current !== entityId) {
+            const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
+            const text = note?.text || '';
+            setCurrentNotes(text);
+            lastSavedNotesRef.current = text;
+            setEditingTaskId(null);
+            prevEntityIdRef.current = entityId;
+        } else {
+            // Same entity, check for external updates
+            const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
+            const remoteText = note?.text || '';
+            
+            // Only update local state if remote is different from what we last successfully saved
+            // This filters out the echo from our own debounce save
+            if (remoteText !== lastSavedNotesRef.current) {
+                // External update detected (or initial load finished)
+                setCurrentNotes(remoteText);
+                lastSavedNotesRef.current = remoteText;
+            }
+        }
+    }, [entityId, isCsmView, meetingNotes]);
     
     // Auto-Save Notes Effect
     useEffect(() => {
         if (!canEdit) return; // Don't try to save if read-only
 
         const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
+        const savedText = note?.text || '';
         
         // Only save if dirty and different from saved
-        if (currentNotes !== (note?.text || '')) {
+        if (currentNotes !== savedText) {
              setIsSavingNotes(true);
              const timer = setTimeout(() => {
+                // Update the ref right before saving to "claim" this update
+                lastSavedNotesRef.current = currentNotes;
+                
                 setMeetingNotes(prev => {
                     const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
                     if (existing) {
@@ -476,6 +528,8 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
             });
             const newText = `${currentNotes}\n\n**AI Summary:**\n${response.text}`;
             setCurrentNotes(newText); 
+            lastSavedNotesRef.current = newText;
+            
             // Trigger immediate save for summary
             setMeetingNotes(prev => {
                 const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
@@ -862,109 +916,64 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const { customers, users, currentUser } = useAppContext();
-    const [activeId, setActiveId] = useState<string>(csmId);
-    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [selectedEntityId, setSelectedEntityId] = useState<string>(csmId);
     
-    // Determine Permissions
-    // 1. If Manager, always can edit.
-    // 2. If CSM, can only edit if viewing their OWN ID.
-    const isManager = currentUser?.role === 'manager';
-    const isOwner = currentUser?.id === csmId;
-    const canEdit = isManager || isOwner;
-
-    // Ensure we reset to self if the csmId prop changes
+    // Determine if we should reset selection when csmId changes
     useEffect(() => {
-        setActiveId(csmId);
+        setSelectedEntityId(csmId);
     }, [csmId]);
 
-    const myCustomers = useMemo(() => 
+    const assignedCustomers = useMemo(() => 
         customers.filter(c => c.assignedCsmId === csmId).sort((a,b) => a.name.localeCompare(b.name)), 
     [customers, csmId]);
 
-    const viewedUser = users.find(u => u.id === csmId);
-
-    if (!viewedUser) return <div className="p-8 text-center text-slate-500">User not found.</div>;
+    const csmUser = users.find(u => u.id === csmId);
+    
+    const canEdit = useMemo(() => {
+        if (!currentUser) return false;
+        if (currentUser.role === 'manager') return true;
+        if (currentUser.id === csmId) return true;
+        return false; 
+    }, [currentUser, csmId]);
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 items-start h-[calc(100vh-100px)]">
-             {/* Sidebar */}
-             <div className={`flex-shrink-0 flex flex-col gap-6 sticky top-4 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-full md:w-72'}`}>
-                <Card className="p-0 overflow-hidden flex flex-col h-full max-h-[85vh]">
-                    <div className="p-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
-                         {!isSidebarCollapsed && (
-                             <div className="flex items-center gap-3">
-                                 <div className="h-10 w-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-lg flex-shrink-0">
-                                     {viewedUser?.name?.charAt(0) || 'U'}
-                                 </div>
-                                 <div className="overflow-hidden">
-                                     <p className="font-bold text-indigo-900 truncate">{viewedUser?.name}</p>
-                                     <p className="text-xs text-indigo-600 uppercase tracking-wide font-semibold">CSM {canEdit ? '(You)' : '(View Only)'}</p>
-                                 </div>
-                             </div>
-                         )}
-                         <button 
-                            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                            className="p-1 rounded hover:bg-indigo-100 text-indigo-600"
-                            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        <div className="flex flex-col md:flex-row gap-6 items-start">
+            <div className="w-full md:w-64 flex-shrink-0 space-y-2">
+                 <div 
+                    onClick={() => setSelectedEntityId(csmId)}
+                    className={`p-3 rounded-md cursor-pointer flex items-center gap-3 transition-colors ${selectedEntityId === csmId ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'}`}
+                >
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold ${selectedEntityId === csmId ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        {csmUser?.name.charAt(0) || 'U'}
+                    </div>
+                    <span className="font-medium">My Agenda</span>
+                </div>
+
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-4 mb-2 pl-1">Customers</div>
+                
+                <div className="space-y-1 max-h-[calc(100vh-250px)] overflow-y-auto pr-1">
+                    {assignedCustomers.map(customer => (
+                        <div 
+                            key={customer.id}
+                            onClick={() => setSelectedEntityId(customer.id)}
+                            className={`p-2 rounded-md cursor-pointer flex items-center justify-between text-sm transition-colors ${selectedEntityId === customer.id ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
                         >
-                            {isSidebarCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-                         </button>
-                    </div>
-                    
-                    <div className="flex-grow flex flex-col overflow-hidden">
-                        <nav className="p-2 border-b border-slate-100">
-                             <button 
-                                onClick={() => setActiveId(csmId)}
-                                className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${activeId === csmId ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
-                                title={isSidebarCollapsed ? "My Tasks & Notes" : ""}
-                             >
-                                <span className="h-5 w-5 flex items-center justify-center flex-shrink-0"><CheckCircleIcon className={activeId === csmId ? "text-white" : "text-slate-400"} /></span>
-                                {!isSidebarCollapsed && <span>My Tasks & Notes</span>}
-                             </button>
-                        </nav>
-
-                         <div className="p-4 bg-slate-50 border-b border-slate-200">
-                            {isSidebarCollapsed ? (
-                                <div className="flex justify-center"><UsersIcon /></div>
-                            ) : (
-                                <h3 className="font-bold text-slate-700 flex items-center gap-2">
-                                    <UsersIcon /> My Customers <span className="ml-auto bg-slate-200 text-slate-600 py-0.5 px-2 rounded-full text-xs">{myCustomers.length}</span>
-                                </h3>
-                            )}
+                            <span className="truncate">{customer.name}</span>
                         </div>
-                        <div className="p-2 overflow-y-auto flex-grow space-y-1">
-                             {myCustomers.map(customer => (
-                                <button
-                                    key={customer.id}
-                                    onClick={() => setActiveId(customer.id)}
-                                    className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeId === customer.id ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
-                                    title={isSidebarCollapsed ? customer.name : ""}
-                                >
-                                    {isSidebarCollapsed ? (
-                                        <div className="h-6 w-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold mx-auto">
-                                            {customer.name.charAt(0)}
-                                        </div>
-                                    ) : (
-                                        customer.name
-                                    )}
-                                </button>
-                            ))}
-                            {!isSidebarCollapsed && myCustomers.length === 0 && <div className="text-slate-400 text-sm text-center py-4">No customers assigned yet.</div>}
-                        </div>
-                    </div>
-                </Card>
-             </div>
+                    ))}
+                    {assignedCustomers.length === 0 && (
+                        <div className="text-sm text-slate-400 italic p-2">No customers assigned.</div>
+                    )}
+                </div>
+            </div>
 
-             {/* Main Content */}
-             <div className="flex-grow w-full min-w-0">
-                  <div className="mb-4 flex items-center justify-between">
-                        <h2 className="text-2xl font-bold text-slate-800">
-                            {activeId === csmId ? 'My Agenda' : myCustomers.find(c => c.id === activeId)?.name || 'Customer Agenda'}
-                        </h2>
-                        {!canEdit && <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded">Read Only</span>}
-                  </div>
-                  <Agenda key={activeId} entityId={activeId} entityType={activeId === csmId ? 'csm' : 'customer'} canEdit={canEdit} />
-             </div>
+            <div className="flex-grow w-full min-w-0">
+                 <Agenda 
+                    entityId={selectedEntityId} 
+                    entityType={selectedEntityId === csmId ? 'csm' : 'customer'} 
+                    canEdit={canEdit} 
+                />
+            </div>
         </div>
     );
 };
