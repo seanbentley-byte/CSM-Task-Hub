@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
-import { Card, Button, TrashIcon, PencilIcon, CloudIcon, RefreshIcon, CheckCircleIcon } from './ui';
+import { Card, Button, TrashIcon, PencilIcon, CloudIcon, RefreshIcon, CheckCircleIcon, ChevronDownIcon } from './ui';
 import { User, Customer, GoogleSheetsConfig } from '../types';
 import { sheetsService } from '../sheets';
 
@@ -78,6 +78,7 @@ const SettingsView: React.FC = () => {
     } = useAppContext();
 
     const customerFormRef = useRef<HTMLFormElement>(null);
+    const [isSheetsExpanded, setIsSheetsExpanded] = useState(false);
     
     // User Management
     const [userName, setUserName] = useState('');
@@ -258,81 +259,6 @@ const SettingsView: React.FC = () => {
     return (
         <div className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                 {/* Google Sheets Integration */}
-                 <Card className="lg:col-span-2 border-indigo-200 ring-4 ring-indigo-50">
-                    <div className="flex items-start justify-between">
-                         <div>
-                            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                                <CloudIcon /> Google Sheets Backend
-                            </h2>
-                            <p className="text-slate-600 mt-1">
-                                Store your data in a Google Sheet for free. No server required.
-                            </p>
-                        </div>
-                        {isSheetConnected && (
-                            <div className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                                <CheckCircleIcon /> Connected
-                            </div>
-                        )}
-                    </div>
-                    
-                    <div className="mt-6 bg-slate-50 p-4 rounded-md border border-slate-200">
-                        <h3 className="font-semibold text-slate-800 mb-2">How to Connect (5 Minutes)</h3>
-                        <ol className="list-decimal list-inside text-sm text-slate-700 space-y-2 mb-4">
-                            <li>Create a new blank Google Sheet at <a href="https://sheets.new" target="_blank" className="text-indigo-600 underline">sheets.new</a>.</li>
-                            <li>In the Sheet, go to <strong>Extensions</strong> &gt; <strong>Apps Script</strong>.</li>
-                            <li>Delete any existing code in <code>Code.gs</code> and paste the code below.</li>
-                            <li>Click the blue <strong>Deploy</strong> button &gt; <strong>New deployment</strong>.</li>
-                            <li>Click the <strong>gear icon</strong> next to "Select type" and choose <strong>Web app</strong>.</li>
-                            <li><strong>IMPORTANT:</strong> Set "Who has access" to <strong>Anyone</strong>. (This allows the app to save data without a login popup).</li>
-                            <li>Click <strong>Deploy</strong>. 
-                                <span className="block ml-5 text-xs text-slate-500 mt-1">
-                                    (Authorize access &gt; Advanced &gt; Go to Untitled Project (unsafe) &gt; Allow)
-                                </span>
-                            </li>
-                            <li>Copy the <strong>Web App URL</strong> and paste it below.</li>
-                        </ol>
-                         <div className="relative">
-                            <pre className="bg-slate-800 text-slate-200 p-4 rounded-md text-xs overflow-x-auto h-48 font-mono leading-relaxed">
-                                {APP_SCRIPT_CODE}
-                            </pre>
-                            <button 
-                                onClick={copyCodeToClipboard}
-                                className="absolute top-2 right-2 bg-white text-slate-800 text-xs px-2 py-1 rounded shadow hover:bg-slate-100 font-medium"
-                            >
-                                Copy Code
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="mt-4">
-                        <label className="block text-sm font-medium text-slate-700">Web App URL</label>
-                        <input 
-                            type="text" 
-                            value={webAppUrl} 
-                            onChange={e => setWebAppUrl(e.target.value)} 
-                            placeholder="https://script.google.com/macros/s/..." 
-                            className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm sm:text-sm"
-                        />
-                    </div>
-
-                    <div className="mt-4 flex gap-4 items-center">
-                        <Button onClick={handleSaveSheetsConfig} disabled={!webAppUrl}>Save & Connect</Button>
-                        
-                        {sheetsConfig && isSheetConnected && (
-                            <div className="flex gap-2">
-                                <Button variant="secondary" onClick={() => syncData('pull')} disabled={isSyncing}>
-                                     <RefreshIcon className="w-4 h-4 mr-2" /> {isSyncing ? 'Syncing...' : 'Pull Data'}
-                                </Button>
-                                <Button variant="primary" onClick={() => syncData('push')} disabled={isSyncing}>
-                                    <CloudIcon /> {isSyncing ? 'Syncing...' : 'Push Data'}
-                                </Button>
-                            </div>
-                        )}
-                         {lastSyncTime && <span className="text-sm text-slate-500">Last synced: {new Date(lastSyncTime).toLocaleTimeString()}</span>}
-                    </div>
-                </Card>
-
                 {/* User Management */}
                 <Card>
                     <h2 className="text-2xl font-bold text-slate-800 mb-4">Manage Users</h2>
@@ -435,6 +361,96 @@ const SettingsView: React.FC = () => {
                     </div>
                 </Card>
             </div>
+
+             {/* Google Sheets Integration */}
+             <Card className="border-indigo-200 ring-4 ring-indigo-50 transition-all duration-300">
+                <div 
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setIsSheetsExpanded(!isSheetsExpanded)}
+                >
+                     <div>
+                        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                            <CloudIcon /> Google Sheets Backend
+                        </h2>
+                        {!isSheetsExpanded && (
+                             <p className="text-slate-600 mt-1 text-sm">
+                                Store your data in a Google Sheet for free. Click to expand configuration.
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                        {isSheetConnected && (
+                            <div className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                                <CheckCircleIcon /> Connected
+                            </div>
+                        )}
+                         <ChevronDownIcon className={`transform transition-transform duration-300 ${isSheetsExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+                </div>
+                
+                {isSheetsExpanded && (
+                    <div className="mt-6 border-t border-indigo-100 pt-6">
+                        <p className="text-slate-600 mb-4">
+                            Store your data in a Google Sheet for free. No server required.
+                        </p>
+                        <div className="mt-6 bg-slate-50 p-4 rounded-md border border-slate-200">
+                            <h3 className="font-semibold text-slate-800 mb-2">How to Connect (5 Minutes)</h3>
+                            <ol className="list-decimal list-inside text-sm text-slate-700 space-y-2 mb-4">
+                                <li>Create a new blank Google Sheet at <a href="https://sheets.new" target="_blank" className="text-indigo-600 underline">sheets.new</a>.</li>
+                                <li>In the Sheet, go to <strong>Extensions</strong> &gt; <strong>Apps Script</strong>.</li>
+                                <li>Delete any existing code in <code>Code.gs</code> and paste the code below.</li>
+                                <li>Click the blue <strong>Deploy</strong> button &gt; <strong>New deployment</strong>.</li>
+                                <li>Click the <strong>gear icon</strong> next to "Select type" and choose <strong>Web app</strong>.</li>
+                                <li><strong>IMPORTANT:</strong> Set "Who has access" to <strong>Anyone</strong>. (This allows the app to save data without a login popup).</li>
+                                <li>Click <strong>Deploy</strong>. 
+                                    <span className="block ml-5 text-xs text-slate-500 mt-1">
+                                        (Authorize access &gt; Advanced &gt; Go to Untitled Project (unsafe) &gt; Allow)
+                                    </span>
+                                </li>
+                                <li>Copy the <strong>Web App URL</strong> and paste it below.</li>
+                            </ol>
+                             <div className="relative">
+                                <pre className="bg-slate-800 text-slate-200 p-4 rounded-md text-xs overflow-x-auto h-48 font-mono leading-relaxed">
+                                    {APP_SCRIPT_CODE}
+                                </pre>
+                                <button 
+                                    onClick={copyCodeToClipboard}
+                                    className="absolute top-2 right-2 bg-white text-slate-800 text-xs px-2 py-1 rounded shadow hover:bg-slate-100 font-medium"
+                                >
+                                    Copy Code
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="mt-4">
+                            <label className="block text-sm font-medium text-slate-700">Web App URL</label>
+                            <input 
+                                type="text" 
+                                value={webAppUrl} 
+                                onChange={e => setWebAppUrl(e.target.value)} 
+                                placeholder="https://script.google.com/macros/s/..." 
+                                className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm sm:text-sm"
+                            />
+                        </div>
+
+                        <div className="mt-4 flex gap-4 items-center">
+                            <Button onClick={handleSaveSheetsConfig} disabled={!webAppUrl}>Save & Connect</Button>
+                            
+                            {sheetsConfig && isSheetConnected && (
+                                <div className="flex gap-2">
+                                    <Button variant="secondary" onClick={() => syncData('pull')} disabled={isSyncing}>
+                                         <RefreshIcon className="w-4 h-4 mr-2" /> {isSyncing ? 'Syncing...' : 'Pull Data'}
+                                    </Button>
+                                    <Button variant="primary" onClick={() => syncData('push')} disabled={isSyncing}>
+                                        <CloudIcon /> {isSyncing ? 'Syncing...' : 'Push Data'}
+                                    </Button>
+                                </div>
+                            )}
+                             {lastSyncTime && <span className="text-sm text-slate-500">Last synced: {new Date(lastSyncTime).toLocaleTimeString()}</span>}
+                        </div>
+                    </div>
+                )}
+            </Card>
         </div>
     );
 };
