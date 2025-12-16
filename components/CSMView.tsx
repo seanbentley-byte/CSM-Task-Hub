@@ -897,6 +897,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const { customers, users, currentUser } = useAppContext();
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     const viewingUser = users.find(u => u.id === csmId);
     const myCustomers = useMemo(() => customers.filter(c => c.assignedCsmId === csmId).sort((a,b) => a.name.localeCompare(b.name)), [customers, csmId]);
@@ -914,37 +915,87 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     }, [currentUser, csmId]);
 
     return (
-        <div className="flex flex-col md:flex-row gap-6">
-            <div className="w-full md:w-1/4 space-y-4">
-                <Card className="p-4">
-                    <h3 className="font-bold text-slate-700 mb-2 truncate" title={viewingUser?.name}>{viewingUser?.name || 'CSM'}'s Dashboard</h3>
-                     <div className="space-y-1">
-                        <button
-                            onClick={() => setSelectedCustomerId(null)}
-                            className={`w-full text-left px-3 py-2 rounded-md transition-colors ${selectedCustomerId === null ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-600'}`}
+        <div className="flex flex-col md:flex-row gap-6 transition-all duration-300 ease-in-out">
+            <div 
+                className={`transition-all duration-300 ease-in-out flex-shrink-0 ${
+                    isSidebarOpen ? 'w-full md:w-1/4' : 'w-full md:w-16'
+                }`}
+            >
+                <Card className={`p-4 h-full flex flex-col ${!isSidebarOpen ? 'items-center' : ''}`}>
+                    <div className={`flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'} mb-4`}>
+                        {isSidebarOpen && (
+                            <h3 className="font-bold text-slate-700 truncate mr-2" title={viewingUser?.name}>
+                                {viewingUser?.name || 'CSM'}'s Dashboard
+                            </h3>
+                        )}
+                        <button 
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="text-slate-500 hover:text-indigo-600 p-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                            title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                         >
-                            My Personal Tasks
+                            {isSidebarOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
                         </button>
                     </div>
                     
-                    <h4 className="font-semibold text-slate-600 mt-4 mb-2 px-3 text-sm uppercase tracking-wider">Customers</h4>
-                    <div className="space-y-1 max-h-[60vh] overflow-y-auto">
-                        {myCustomers.map(customer => (
+                    {/* Content when open */}
+                    <div className={`space-y-4 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'} transition-opacity duration-200`}>
+                        <div className="space-y-1">
                              <button
-                                key={customer.id}
-                                onClick={() => setSelectedCustomerId(customer.id)}
-                                className={`w-full text-left px-3 py-2 rounded-md transition-colors truncate ${selectedCustomerId === customer.id ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-600'}`}
-                                title={customer.name}
+                                onClick={() => setSelectedCustomerId(null)}
+                                className={`w-full text-left px-3 py-2 rounded-md transition-colors flex items-center gap-2 ${selectedCustomerId === null ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-600'}`}
                             >
-                                {customer.name}
+                                <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
+                                My Personal Tasks
                             </button>
-                        ))}
-                        {myCustomers.length === 0 && <p className="px-3 text-sm text-slate-400">No customers assigned.</p>}
+                        </div>
+                        
+                        <div>
+                            <h4 className="font-semibold text-slate-600 mb-2 px-3 text-sm uppercase tracking-wider">Customers</h4>
+                            <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-1">
+                                {myCustomers.map(customer => (
+                                     <button
+                                        key={customer.id}
+                                        onClick={() => setSelectedCustomerId(customer.id)}
+                                        className={`w-full text-left px-3 py-2 rounded-md transition-colors truncate flex items-center gap-2 ${selectedCustomerId === customer.id ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-600'}`}
+                                        title={customer.name}
+                                    >
+                                        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${selectedCustomerId === customer.id ? 'bg-indigo-500' : 'bg-slate-300'}`}></span>
+                                        <span className="truncate">{customer.name}</span>
+                                    </button>
+                                ))}
+                                {myCustomers.length === 0 && <p className="px-3 text-sm text-slate-400">No customers assigned.</p>}
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Content when closed (Icons only) */}
+                    {!isSidebarOpen && (
+                         <div className="flex flex-col gap-4 w-full items-center mt-2 animate-fadeIn">
+                             <button
+                                onClick={() => { setSelectedCustomerId(null); }}
+                                className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${selectedCustomerId === null ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:bg-slate-100'}`}
+                                title="My Personal Tasks"
+                            >
+                                <span className="font-bold text-xs">Me</span>
+                            </button>
+                            
+                            <div className="w-full border-t border-slate-200 my-1"></div>
+
+                            {selectedCustomerId && (
+                                <div 
+                                    className="w-8 h-8 flex items-center justify-center rounded-md bg-indigo-100 text-indigo-700 font-bold text-xs cursor-default"
+                                    title={myCustomers.find(c => c.id === selectedCustomerId)?.name}
+                                >
+                                    {myCustomers.find(c => c.id === selectedCustomerId)?.name.substring(0,2).toUpperCase()}
+                                </div>
+                            )}
+                         </div>
+                    )}
+
                 </Card>
             </div>
             
-            <div className="w-full md:w-3/4">
+            <div className="flex-grow w-full min-w-0">
                 <Agenda 
                     key={selectedCustomerId || csmId} 
                     entityId={selectedCustomerId || csmId} 
