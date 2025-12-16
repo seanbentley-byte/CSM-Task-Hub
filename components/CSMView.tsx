@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
-import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon, MarkdownRenderer } from './ui';
+import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon, MarkdownRenderer, PencilIcon } from './ui';
 import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
@@ -15,6 +15,285 @@ const formatDate = (dateStr: string) => {
     return dateStr;
 };
 
+// --- Helper Components for Editable Rows ---
+
+const ActionItemRow: React.FC<{
+    item: ActionItem;
+    onToggle: (id: string, currentStatus: boolean) => void;
+    onDelete: (id: string) => void;
+    onUpdate: (id: string, text: string) => void;
+    canEdit: boolean;
+}> = ({ item, onToggle, onDelete, onUpdate, canEdit }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [text, setText] = useState(item.text);
+
+    const handleSave = () => {
+        if (text.trim()) {
+            onUpdate(item.id, text.trim());
+        } else {
+            setText(item.text);
+        }
+        setIsEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') handleSave();
+        if (e.key === 'Escape') {
+            setText(item.text);
+            setIsEditing(false);
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-between p-2 bg-white rounded-md group hover:shadow-sm border border-transparent hover:border-slate-200 transition-all">
+            <div className="flex items-center flex-grow gap-3 min-w-0">
+                <input 
+                    type="checkbox" 
+                    checked={item.isCompleted} 
+                    onChange={() => onToggle(item.id, item.isCompleted)} 
+                    disabled={!canEdit} 
+                    className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 flex-shrink-0" 
+                />
+                
+                {isEditing ? (
+                    <input 
+                        autoFocus
+                        value={text} 
+                        onChange={e => setText(e.target.value)} 
+                        onBlur={handleSave}
+                        onKeyDown={handleKeyDown}
+                        className="flex-grow p-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
+                ) : (
+                    <span 
+                        onClick={() => canEdit && !item.isCompleted && setIsEditing(true)} 
+                        className={`flex-grow text-sm truncate ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'} ${canEdit && !item.isCompleted ? 'cursor-pointer hover:text-indigo-600' : ''}`}
+                        title={canEdit && !item.isCompleted ? "Click to edit" : ""}
+                    >
+                        {item.text}
+                    </span>
+                )}
+            </div>
+            {canEdit && (
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                     {!isEditing && !item.isCompleted && (
+                        <button onClick={() => setIsEditing(true)} className="text-slate-400 hover:text-indigo-600 p-1">
+                            <PencilIcon />
+                        </button>
+                    )}
+                    <button onClick={() => onDelete(item.id)} className="text-slate-400 hover:text-red-600 p-1">
+                        <TrashIcon />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const BugReportRow: React.FC<{
+    item: BugReport;
+    onComplete: (id: string) => void;
+    onDelete: (id: string) => void;
+    onUpdate: (id: string, updates: Partial<BugReport>) => void;
+    canEdit: boolean;
+}> = ({ item, onComplete, onDelete, onUpdate, canEdit }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [name, setName] = useState(item.name);
+    const [link, setLink] = useState(item.ticketLink || '');
+
+    const handleSave = () => {
+        if (name.trim()) {
+            onUpdate(item.id, { name: name.trim(), ticketLink: link.trim() });
+        } else {
+            setName(item.name);
+            setLink(item.ticketLink);
+        }
+        setIsEditing(false);
+    };
+
+    if (isEditing) {
+        return (
+            <div className="p-3 bg-indigo-50 rounded-md border border-indigo-200 space-y-2">
+                <div>
+                    <label className="block text-xs font-semibold text-indigo-800 mb-1">Bug Description</label>
+                    <input 
+                        autoFocus
+                        value={name} 
+                        onChange={e => setName(e.target.value)} 
+                        className="w-full p-1.5 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="Bug description..."
+                        onKeyDown={e => e.key === 'Enter' && handleSave()}
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-semibold text-indigo-800 mb-1">Ticket Link (Optional)</label>
+                    <input 
+                        value={link} 
+                        onChange={e => setLink(e.target.value)} 
+                        className="w-full p-1.5 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="https://..."
+                        onKeyDown={e => e.key === 'Enter' && handleSave()}
+                    />
+                </div>
+                <div className="flex justify-end gap-2 mt-2">
+                    <Button variant="secondary" onClick={() => { setIsEditing(false); setName(item.name); setLink(item.ticketLink); }} className="text-xs py-1 px-2 h-8">Cancel</Button>
+                    <Button onClick={handleSave} className="text-xs py-1 px-2 h-8">Save</Button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex justify-between items-start p-2 rounded-md group hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all">
+            <div 
+                className={`flex-grow ${canEdit && !item.isCompleted ? 'cursor-pointer' : ''}`} 
+                onClick={() => canEdit && !item.isCompleted && setIsEditing(true)}
+                title={canEdit && !item.isCompleted ? "Click to edit" : ""}
+            >
+                <p className={`text-sm ${item.isCompleted ? 'line-through text-slate-500' : 'text-slate-800 group-hover:text-indigo-700'}`}>
+                    {item.name}
+                </p>
+                {item.ticketLink && (
+                    <a 
+                        href={item.ticketLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-xs text-indigo-600 hover:underline flex items-center gap-1 mt-0.5 w-fit"
+                        onClick={(e) => e.stopPropagation()} 
+                    >
+                        <LinkIcon /> Ticket
+                    </a>
+                )}
+            </div>
+            <div className="flex gap-1 items-center ml-2">
+                {canEdit && !item.isCompleted && (
+                     <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-2 h-7 mr-1">Complete</Button>
+                )}
+                
+                {canEdit && (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         {!item.isCompleted && (
+                             <button onClick={() => setIsEditing(true)} className="text-slate-400 hover:text-indigo-600 p-1">
+                                <PencilIcon />
+                            </button>
+                         )}
+                        <button onClick={() => onDelete(item.id)} className="text-slate-400 hover:text-red-600 p-1">
+                            <TrashIcon />
+                        </button>
+                    </div>
+                )}
+                 {item.isCompleted && item.completedAt && (
+                     <span className="text-xs text-slate-400 whitespace-nowrap">
+                        {new Date(item.completedAt).toLocaleDateString()}
+                     </span>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const FeatureRequestRow: React.FC<{
+    item: FeatureRequest;
+    onComplete: (id: string) => void;
+    onDelete: (id: string) => void;
+    onUpdate: (id: string, updates: Partial<FeatureRequest>) => void;
+    canEdit: boolean;
+}> = ({ item, onComplete, onDelete, onUpdate, canEdit }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [text, setText] = useState(item.text);
+    const [link, setLink] = useState(item.ticketLink || '');
+
+    const handleSave = () => {
+        if (text.trim()) {
+            onUpdate(item.id, { text: text.trim(), ticketLink: link.trim() });
+        } else {
+            setText(item.text);
+            setLink(item.ticketLink);
+        }
+        setIsEditing(false);
+    };
+
+    if (isEditing) {
+        return (
+            <div className="p-3 bg-indigo-50 rounded-md border border-indigo-200 space-y-2">
+                <div>
+                     <label className="block text-xs font-semibold text-indigo-800 mb-1">Feature Request</label>
+                    <input 
+                        autoFocus
+                        value={text} 
+                        onChange={e => setText(e.target.value)} 
+                        className="w-full p-1.5 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="Feature description..."
+                        onKeyDown={e => e.key === 'Enter' && handleSave()}
+                    />
+                </div>
+                 <div>
+                    <label className="block text-xs font-semibold text-indigo-800 mb-1">Ticket Link (Optional)</label>
+                    <input 
+                        value={link} 
+                        onChange={e => setLink(e.target.value)} 
+                        className="w-full p-1.5 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="https://..."
+                        onKeyDown={e => e.key === 'Enter' && handleSave()}
+                    />
+                </div>
+                <div className="flex justify-end gap-2 mt-2">
+                    <Button variant="secondary" onClick={() => { setIsEditing(false); setText(item.text); setLink(item.ticketLink); }} className="text-xs py-1 px-2 h-8">Cancel</Button>
+                    <Button onClick={handleSave} className="text-xs py-1 px-2 h-8">Save</Button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex justify-between items-start p-2 rounded-md group hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all">
+             <div 
+                className={`flex-grow ${canEdit && !item.isCompleted ? 'cursor-pointer' : ''}`} 
+                onClick={() => canEdit && !item.isCompleted && setIsEditing(true)}
+                title={canEdit && !item.isCompleted ? "Click to edit" : ""}
+            >
+                <p className={`text-sm ${item.isCompleted ? 'line-through text-slate-500' : 'text-slate-800 group-hover:text-indigo-700'}`}>
+                    {item.text}
+                </p>
+                {item.ticketLink && (
+                    <a 
+                        href={item.ticketLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-xs text-indigo-600 hover:underline flex items-center gap-1 mt-0.5 w-fit"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <LinkIcon /> Ticket
+                    </a>
+                )}
+            </div>
+            <div className="flex gap-1 items-center ml-2">
+                 {canEdit && !item.isCompleted && (
+                     <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-2 h-7 mr-1">Complete</Button>
+                 )}
+                 {canEdit && (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         {!item.isCompleted && (
+                             <button onClick={() => setIsEditing(true)} className="text-slate-400 hover:text-indigo-600 p-1">
+                                <PencilIcon />
+                            </button>
+                         )}
+                        <button onClick={() => onDelete(item.id)} className="text-slate-400 hover:text-red-600 p-1">
+                            <TrashIcon />
+                        </button>
+                    </div>
+                 )}
+                 {item.isCompleted && item.completedAt && (
+                     <span className="text-xs text-slate-400 whitespace-nowrap">
+                        {new Date(item.completedAt).toLocaleDateString()}
+                     </span>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
 const TaskCompletionForm: React.FC<{
     task: Task;
     customerId?: string;
@@ -22,7 +301,8 @@ const TaskCompletionForm: React.FC<{
     existingCompletion?: TaskCompletion;
     onSave: (completion: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions'>) => void;
     onCancel: () => void;
-}> = ({ task, customerId, csmId, existingCompletion, onSave, onCancel }) => {
+    canEdit: boolean;
+}> = ({ task, customerId, csmId, existingCompletion, onSave, onCancel, canEdit }) => {
     const [isCompleted, setIsCompleted] = useState(existingCompletion?.isCompleted || false);
     const [notes, setNotes] = useState(existingCompletion?.notes || '');
     const [selectedOptions, setSelectedOptions] = useState<string[]>(existingCompletion?.selectedOptions || []);
@@ -56,7 +336,14 @@ const TaskCompletionForm: React.FC<{
 
             {hasCheckbox && (
                 <div className="flex items-center">
-                    <input id={`complete-${task.id}-${customerId || csmId}`} type="checkbox" checked={isCompleted} onChange={e => setIsCompleted(e.target.checked)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                    <input 
+                        id={`complete-${task.id}-${customerId || csmId}`} 
+                        type="checkbox" 
+                        checked={isCompleted} 
+                        onChange={e => setIsCompleted(e.target.checked)} 
+                        disabled={!canEdit}
+                        className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 disabled:opacity-50" 
+                    />
                     <label htmlFor={`complete-${task.id}-${customerId || csmId}`} className="ml-2 block text-sm font-medium text-slate-700">Mark as Complete</label>
                 </div>
             )}
@@ -66,7 +353,8 @@ const TaskCompletionForm: React.FC<{
                     <select
                         value={selectedOptions[0] || ''}
                         onChange={handleMultiSelectChange}
-                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                        disabled={!canEdit}
+                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md disabled:bg-slate-100 disabled:text-slate-500"
                     >
                         <option value="">Select an option...</option>
                         {task.multiSelectOptions.map(opt => (
@@ -78,18 +366,25 @@ const TaskCompletionForm: React.FC<{
             {hasTextArea && (
                 <div>
                     <label htmlFor={`notes-${task.id}-${customerId || csmId}`} className="block text-sm font-medium text-slate-700">Notes:</label>
-                    <textarea id={`notes-${task.id}-${customerId || csmId}`} value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+                    <textarea 
+                        id={`notes-${task.id}-${customerId || csmId}`} 
+                        value={notes} 
+                        onChange={e => setNotes(e.target.value)} 
+                        disabled={!canEdit}
+                        rows={3} 
+                        className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-slate-100"
+                    ></textarea>
                 </div>
             )}
             <div className="flex justify-end gap-2">
                 <Button variant="secondary" onClick={onCancel}>Cancel</Button>
-                <Button onClick={handleSave}>Save</Button>
+                {canEdit && <Button onClick={handleSave}>Save</Button>}
             </div>
         </div>
     )
 }
 
-const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = ({ entityId, entityType }) => {
+const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEdit: boolean }> = ({ entityId, entityType, canEdit }) => {
     const { 
         customers, users, tasks, taskCompletions, setTaskCompletions,
         actionItems, setActionItems,
@@ -132,6 +427,8 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     
     // Auto-Save Notes Effect
     useEffect(() => {
+        if (!canEdit) return; // Don't try to save if read-only
+
         const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
         
         // Only save if dirty and different from saved
@@ -152,7 +449,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
         } else {
             setIsSavingNotes(false);
         }
-    }, [currentNotes, entityId, isCsmView]);
+    }, [currentNotes, entityId, isCsmView, canEdit]);
 
 
     const entity = isCsmView ? users.find(c => c.id === entityId) : customers.find(c => c.id === entityId);
@@ -169,7 +466,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, entityId, isCsmView]);
 
     const handleSummarizeNotes = async () => {
-        if (!currentNotes || !apiKey) return;
+        if (!currentNotes || !apiKey || !canEdit) return;
         setIsSummarizing(true);
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -213,10 +510,17 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     };
     
     const handleToggleActionItem = (id: string, isCompleted: boolean) => {
+        if (!canEdit) return;
         setActionItems(prev => prev.map(ai => ai.id === id ? { ...ai, isCompleted: !isCompleted, completedAt: !isCompleted ? Date.now() : undefined } : ai));
     };
 
+    const handleUpdateActionItem = (id: string, text: string) => {
+        if (!canEdit) return;
+        setActionItems(prev => prev.map(ai => ai.id === id ? { ...ai, text } : ai));
+    };
+
     const handleDeleteActionItem = (id: string) => {
+        if (!canEdit) return;
         if(window.confirm('Are you sure you want to delete this action item?')) {
             setActionItems(prev => prev.filter(ai => ai.id !== id));
         }
@@ -241,10 +545,17 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     };
 
     const handleCompleteBug = (id: string) => {
+        if (!canEdit) return;
         setBugReports(prev => prev.map(b => b.id === id ? { ...b, isCompleted: true, completedAt: Date.now() } : b));
     };
 
+    const handleUpdateBug = (id: string, updates: Partial<BugReport>) => {
+        if (!canEdit) return;
+        setBugReports(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
+    };
+
     const handleDeleteBug = (id: string) => {
+        if (!canEdit) return;
          if(window.confirm('Are you sure you want to delete this bug report?')) {
             setBugReports(prev => prev.filter(b => b.id !== id));
         }
@@ -269,10 +580,17 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
     };
 
     const handleCompleteFeatureRequest = (id: string) => {
+        if (!canEdit) return;
         setFeatureRequests(prev => prev.map(fr => fr.id === id ? { ...fr, isCompleted: true, completedAt: Date.now() } : fr));
     };
 
+    const handleUpdateFeature = (id: string, updates: Partial<FeatureRequest>) => {
+        if (!canEdit) return;
+        setFeatureRequests(prev => prev.map(fr => fr.id === id ? { ...fr, ...updates } : fr));
+    };
+
     const handleDeleteFeatureRequest = (id: string) => {
+        if (!canEdit) return;
         if(window.confirm('Are you sure you want to delete this feature request?')) {
             setFeatureRequests(prev => prev.filter(fr => fr.id !== id));
         }
@@ -311,32 +629,36 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
         <div className="flex-grow space-y-4 pb-8">
             <Card>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Action Items ({incompleteActionItems.length})</h2>
-                <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4">
-                    <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2 border rounded-md" />
-                    <Button type="submit">Add</Button>
-                </form>
+                {canEdit && (
+                    <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4">
+                        <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2 border rounded-md" />
+                        <Button type="submit">Add</Button>
+                    </form>
+                )}
                 <div className="space-y-2">
                     {incompleteActionItems.map(ai => (
-                         <div key={ai.id} className="flex items-center justify-between p-2 bg-white rounded-md group">
-                            <div className="flex items-center">
-                               <input type="checkbox" checked={false} onChange={() => handleToggleActionItem(ai.id, false)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer" />
-                                <span className="ml-3">{ai.text}</span>
-                            </div>
-                            <button onClick={() => handleDeleteActionItem(ai.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"><TrashIcon /></button>
-                         </div>
+                         <ActionItemRow 
+                            key={ai.id} 
+                            item={ai} 
+                            onToggle={handleToggleActionItem} 
+                            onDelete={handleDeleteActionItem} 
+                            onUpdate={handleUpdateActionItem}
+                            canEdit={canEdit} 
+                        />
                     ))}
                     {incompleteActionItems.length === 0 && <p className="text-slate-500 text-sm">No active action items.</p>}
                 </div>
                  {completedActionItems.length > 0 && <hr className="my-4" />}
                 <div className="space-y-2">
                      {visibleCompleted.map(ai => (
-                         <div key={ai.id} className="flex items-center justify-between p-2 bg-white rounded-md group">
-                            <div className="flex items-center">
-                               <input type="checkbox" checked={true} onChange={() => handleToggleActionItem(ai.id, true)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer" />
-                                <span className="ml-3 text-slate-500 line-through">{ai.text}</span>
-                            </div>
-                             <button onClick={() => handleDeleteActionItem(ai.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"><TrashIcon /></button>
-                         </div>
+                         <ActionItemRow 
+                            key={ai.id} 
+                            item={ai} 
+                            onToggle={handleToggleActionItem} 
+                            onDelete={handleDeleteActionItem} 
+                            onUpdate={handleUpdateActionItem}
+                            canEdit={canEdit} 
+                        />
                     ))}
                     {completedActionItems.length > 3 && (
                         <Button variant="secondary" onClick={() => setShowOlderCompleted(!showOlderCompleted)} className="w-full mt-2">
@@ -354,25 +676,25 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                     <ChevronDownIcon className={`transition-transform transform ${isBugsSectionOpen ? 'rotate-180' : ''}`} />
                 </summary>
                 <div className="p-6 pt-0">
-                    <form onSubmit={handleAddBug} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-                        <input type="text" value={newBugName} onChange={e => setNewBugName(e.target.value)} placeholder="Bug name or description..." className="p-2 border rounded-md" required />
-                        <div className="flex gap-2">
-                            <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Link to ticket..." className="flex-grow p-2 border rounded-md" />
-                            <Button type="submit">Add Bug</Button>
-                        </div>
-                    </form>
+                    {canEdit && (
+                        <form onSubmit={handleAddBug} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                            <input type="text" value={newBugName} onChange={e => setNewBugName(e.target.value)} placeholder="Bug name or description..." className="p-2 border rounded-md" required />
+                            <div className="flex gap-2">
+                                <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Link to ticket..." className="flex-grow p-2 border rounded-md" />
+                                <Button type="submit">Add Bug</Button>
+                            </div>
+                        </form>
+                    )}
                     <div className="space-y-2">
                         {openBugs.map(bug => (
-                            <div key={bug.id} className="flex justify-between items-center p-2 group">
-                                <div>
-                                    <p>{bug.name}</p>
-                                    {bug.ticketLink && <a href={bug.ticketLink} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline flex items-center gap-1"><LinkIcon />Ticket</a>}
-                                </div>
-                                <div className="flex gap-2 items-center">
-                                    <Button variant="secondary" onClick={() => handleCompleteBug(bug.id)}>Complete</Button>
-                                    <button onClick={() => handleDeleteBug(bug.id)} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
-                                </div>
-                            </div>
+                             <BugReportRow 
+                                key={bug.id} 
+                                item={bug} 
+                                onComplete={handleCompleteBug} 
+                                onDelete={handleDeleteBug} 
+                                onUpdate={handleUpdateBug}
+                                canEdit={canEdit} 
+                             />
                         ))}
                         {openBugs.length === 0 && <p className="text-slate-500 text-sm">No open bugs.</p>}
                     </div>
@@ -385,10 +707,14 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                             {showCompletedBugs && (
                                 <div className="mt-4 space-y-2">
                                     {completedBugs.map(bug => (
-                                        <div key={bug.id} className="flex justify-between items-center p-2 text-slate-500 bg-slate-50 rounded-md">
-                                            <p className="line-through">{bug.name}</p>
-                                            {bug.completedAt && <span className="text-xs">Completed: {new Date(bug.completedAt).toLocaleDateString()}</span>}
-                                        </div>
+                                         <BugReportRow 
+                                            key={bug.id} 
+                                            item={bug} 
+                                            onComplete={handleCompleteBug} 
+                                            onDelete={handleDeleteBug} 
+                                            onUpdate={handleUpdateBug}
+                                            canEdit={canEdit} 
+                                         />
                                     ))}
                                 </div>
                             )}
@@ -405,25 +731,25 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                     <ChevronDownIcon className="transition-transform transform details-open:-rotate-180" />
                 </summary>
                 <div className="p-6 pt-0">
-                    <form onSubmit={handleAddFeatureRequest} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-                         <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="Add a new feature request..." className="p-2 border rounded-md" required />
-                        <div className="flex gap-2">
-                            <input type="text" value={newFeatureLink} onChange={e => setNewFeatureLink(e.target.value)} placeholder="Link to request (optional)..." className="flex-grow p-2 border rounded-md" />
-                            <Button type="submit">Add Request</Button>
-                        </div>
-                    </form>
+                    {canEdit && (
+                        <form onSubmit={handleAddFeatureRequest} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                            <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="Add a new feature request..." className="p-2 border rounded-md" required />
+                            <div className="flex gap-2">
+                                <input type="text" value={newFeatureLink} onChange={e => setNewFeatureLink(e.target.value)} placeholder="Link to request (optional)..." className="flex-grow p-2 border rounded-md" />
+                                <Button type="submit">Add Request</Button>
+                            </div>
+                        </form>
+                    )}
                     <div className="space-y-2">
                         {openFeatures.map(fr => (
-                            <div key={fr.id} className="flex justify-between items-center p-2 group">
-                                 <div>
-                                    <p>{fr.text}</p>
-                                    {fr.ticketLink && <a href={fr.ticketLink} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:underline flex items-center gap-1"><LinkIcon />Ticket</a>}
-                                </div>
-                                <div className="flex gap-2 items-center">
-                                     <Button variant="secondary" onClick={() => handleCompleteFeatureRequest(fr.id)}>Complete</Button>
-                                     <button onClick={() => handleDeleteFeatureRequest(fr.id)} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
-                                </div>
-                            </div>
+                             <FeatureRequestRow 
+                                key={fr.id} 
+                                item={fr} 
+                                onComplete={handleCompleteFeatureRequest} 
+                                onDelete={handleDeleteFeatureRequest} 
+                                onUpdate={handleUpdateFeature}
+                                canEdit={canEdit} 
+                             />
                         ))}
                         {openFeatures.length === 0 && <p className="text-slate-500 text-sm">No open feature requests.</p>}
                     </div>
@@ -437,10 +763,14 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                             {showCompletedFeatures && (
                                 <div className="mt-4 space-y-2">
                                     {completedFeatures.map(fr => (
-                                        <div key={fr.id} className="flex justify-between items-center p-2 text-slate-500 bg-slate-50 rounded-md">
-                                            <p className="line-through">{fr.text}</p>
-                                            {fr.completedAt && <span className="text-xs">Completed: {new Date(fr.completedAt).toLocaleDateString()}</span>}
-                                        </div>
+                                         <FeatureRequestRow 
+                                            key={fr.id} 
+                                            item={fr} 
+                                            onComplete={handleCompleteFeatureRequest} 
+                                            onDelete={handleDeleteFeatureRequest} 
+                                            onUpdate={handleUpdateFeature}
+                                            canEdit={canEdit} 
+                                         />
                                     ))}
                                 </div>
                             )}
@@ -481,13 +811,13 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                                             )}
                                         </div>
                                     </div>
-                                    {!isEditing && (
+                                    {!isEditing && canEdit && (
                                         <Button variant="secondary" onClick={() => setEditingTaskId(task.id)}>
                                             {completion ? 'Edit' : 'Complete'}
                                         </Button>
                                     )}
                                 </div>
-                                {isEditing && (
+                                {isEditing && canEdit && (
                                     <TaskCompletionForm 
                                         task={task} 
                                         customerId={isCsmView ? undefined : entityId}
@@ -495,6 +825,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                                         existingCompletion={completion} 
                                         onSave={(data) => handleSaveCompletion(task.id, data)}
                                         onCancel={() => setEditingTaskId(null)}
+                                        canEdit={canEdit}
                                     />
                                 )}
                             </div>
@@ -509,22 +840,38 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm' }> = (
                      <h2 className="text-xl font-bold text-slate-800">{isCsmView ? 'Personal Notes' : 'Notes'}</h2>
                      {isSavingNotes && <span className="text-xs text-slate-500 animate-pulse">Saving...</span>}
                 </div>
-                 <textarea value={currentNotes} onChange={e => setCurrentNotes(e.target.value)} rows={6} className="w-full p-2 border rounded-md" placeholder="Start typing notes... (Auto-saves)"></textarea>
-                 <div className="flex justify-end gap-2 mt-2">
-                    <Button onClick={handleSummarizeNotes} disabled={isSummarizing || !apiKey}>
-                        <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
-                    </Button>
-                 </div>
+                 <textarea 
+                    value={currentNotes} 
+                    onChange={e => setCurrentNotes(e.target.value)} 
+                    disabled={!canEdit}
+                    rows={6} 
+                    className="w-full p-2 border rounded-md disabled:bg-slate-100 disabled:text-slate-600" 
+                    placeholder={canEdit ? "Start typing notes... (Auto-saves)" : "No notes available."}
+                ></textarea>
+                 {canEdit && (
+                    <div className="flex justify-end gap-2 mt-2">
+                        <Button onClick={handleSummarizeNotes} disabled={isSummarizing || !apiKey}>
+                            <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
+                        </Button>
+                    </div>
+                 )}
             </Card>
         </div>
     );
 };
 
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
-    const { customers, users } = useAppContext();
+    const { customers, users, currentUser } = useAppContext();
     const [activeId, setActiveId] = useState<string>(csmId);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     
+    // Determine Permissions
+    // 1. If Manager, always can edit.
+    // 2. If CSM, can only edit if viewing their OWN ID.
+    const isManager = currentUser?.role === 'manager';
+    const isOwner = currentUser?.id === csmId;
+    const canEdit = isManager || isOwner;
+
     // Ensure we reset to self if the csmId prop changes
     useEffect(() => {
         setActiveId(csmId);
@@ -534,7 +881,9 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
         customers.filter(c => c.assignedCsmId === csmId).sort((a,b) => a.name.localeCompare(b.name)), 
     [customers, csmId]);
 
-    const currentUser = users.find(u => u.id === csmId);
+    const viewedUser = users.find(u => u.id === csmId);
+
+    if (!viewedUser) return <div className="p-8 text-center text-slate-500">User not found.</div>;
 
     return (
         <div className="flex flex-col md:flex-row gap-6 items-start h-[calc(100vh-100px)]">
@@ -545,11 +894,11 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
                          {!isSidebarCollapsed && (
                              <div className="flex items-center gap-3">
                                  <div className="h-10 w-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-lg flex-shrink-0">
-                                     {currentUser?.name?.charAt(0) || 'U'}
+                                     {viewedUser?.name?.charAt(0) || 'U'}
                                  </div>
                                  <div className="overflow-hidden">
-                                     <p className="font-bold text-indigo-900 truncate">{currentUser?.name}</p>
-                                     <p className="text-xs text-indigo-600 uppercase tracking-wide font-semibold">CSM</p>
+                                     <p className="font-bold text-indigo-900 truncate">{viewedUser?.name}</p>
+                                     <p className="text-xs text-indigo-600 uppercase tracking-wide font-semibold">CSM {canEdit ? '(You)' : '(View Only)'}</p>
                                  </div>
                              </div>
                          )}
@@ -612,8 +961,9 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
                         <h2 className="text-2xl font-bold text-slate-800">
                             {activeId === csmId ? 'My Agenda' : myCustomers.find(c => c.id === activeId)?.name || 'Customer Agenda'}
                         </h2>
+                        {!canEdit && <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded">Read Only</span>}
                   </div>
-                  <Agenda key={activeId} entityId={activeId} entityType={activeId === csmId ? 'csm' : 'customer'} />
+                  <Agenda key={activeId} entityId={activeId} entityType={activeId === csmId ? 'csm' : 'customer'} canEdit={canEdit} />
              </div>
         </div>
     );

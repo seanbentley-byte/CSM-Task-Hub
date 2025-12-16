@@ -160,6 +160,8 @@ const Header: React.FC<{
     const { users } = useAppContext();
     // Allow any user to be selected in the dropdown
     const assignableUsers = users;
+    
+    const isManager = currentUser.role === 'manager';
 
     return (
         <header className="bg-white shadow-sm mb-8">
@@ -171,38 +173,46 @@ const Header: React.FC<{
                
                 <div className="flex items-center gap-4">
                     <span className="text-sm text-slate-600 hidden sm:block">Welcome, <span className="font-semibold">{currentUser.name}</span></span>
-                    {currentUser.role === 'manager' && currentView === 'dashboard' && setCurrentRole && (
-                        <>
-                            <div className="flex items-center rounded-md border border-slate-300 p-0.5 bg-slate-100">
-                                <button 
-                                    onClick={() => setCurrentRole('manager')}
-                                    className={`px-3 py-1 text-sm font-semibold rounded ${currentRole === 'manager' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600'}`}
-                                >
-                                    Manager
-                                </button>
-                                <button
-                                    onClick={() => setCurrentRole('csm')}
-                                    className={`px-3 py-1 text-sm font-semibold rounded ${currentRole === 'csm' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600'}`}
-                                >
-                                    CSM
-                                </button>
-                            </div>
-                            {currentRole === 'csm' && setCurrentCsmId && (
-                                <select 
-                                    value={currentCsmId} 
-                                    onChange={e => setCurrentCsmId(e.target.value)}
-                                    className="w-48 pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                                >
-                                    {assignableUsers.map(user => (
-                                        <option key={user.id} value={user.id}>
-                                            Viewing as {user.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </>
+                    
+                    {/* Role Switcher - Only for Managers */}
+                    {isManager && currentView === 'dashboard' && setCurrentRole && (
+                        <div className="flex items-center rounded-md border border-slate-300 p-0.5 bg-slate-100">
+                            <button 
+                                onClick={() => setCurrentRole('manager')}
+                                className={`px-3 py-1 text-sm font-semibold rounded ${currentRole === 'manager' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600'}`}
+                            >
+                                Manager
+                            </button>
+                            <button
+                                onClick={() => setCurrentRole('csm')}
+                                className={`px-3 py-1 text-sm font-semibold rounded ${currentRole === 'csm' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600'}`}
+                            >
+                                CSM
+                            </button>
+                        </div>
                     )}
-                    {currentUser.role === 'manager' && (
+                    
+                    {/* CSM Selector - Visible to Managers (when in CSM view) AND CSMs (to view others) */}
+                    {currentRole === 'csm' && setCurrentCsmId && (
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="view-as" className="text-sm text-slate-500 hidden md:block">Viewing as:</label>
+                            <select 
+                                id="view-as"
+                                value={currentCsmId} 
+                                onChange={e => setCurrentCsmId(e.target.value)}
+                                className="w-48 pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                            >
+                                {assignableUsers.map(user => (
+                                    <option key={user.id} value={user.id}>
+                                        {user.name} {user.id === currentUser.id ? '(You)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Settings Link - Only for Managers */}
+                    {isManager && (
                          <button 
                             onClick={() => setCurrentView(currentView === 'dashboard' ? 'settings' : 'dashboard')}
                             className="p-2 rounded-full hover:bg-slate-100 text-slate-600 flex items-center gap-2"
@@ -224,25 +234,35 @@ const AppContent: React.FC = () => {
 
     // State for manager view
     const [currentView, setCurrentView] = useState<'dashboard' | 'settings'>('dashboard');
-    const [currentRole, setCurrentRole] = useState<'manager' | 'csm'>('manager');
+    
+    // Initialize role: Managers start as 'manager', CSMs start as 'csm'
+    const [currentRole, setCurrentRole] = useState<'manager' | 'csm'>('csm');
 
-    // Default to the current user's own agenda if they are in the list, otherwise the first user
+    // Default to the current user's own agenda if they are in the list
     const [currentCsmId, setCurrentCsmId] = useState<string>('');
     
+    // On Mount/User Change: Initialize state based on the logged-in user
     useEffect(() => {
         if (!currentUser) return;
         
-        // When switching to CSM role (User View), try to default to the current user if possible
-        if (currentRole === 'csm') {
-            if (!currentCsmId) {
-                // If not set yet, default to self
-                 setCurrentCsmId(currentUser.id);
-            } else if (!users.find(u => u.id === currentCsmId)) {
-                // If current selection is invalid (e.g. user deleted), reset to self or first user
-                setCurrentCsmId(currentUser.id);
+        // Initialize Role
+        setCurrentRole(currentUser.role);
+        
+        // Initialize CSM ID Selection
+        // Always default to Self on login
+        setCurrentCsmId(currentUser.id);
+
+    }, [currentUser]);
+
+    // Safety check: If looking at a CSM that doesn't exist, revert to self
+    useEffect(() => {
+        if (currentRole === 'csm' && currentCsmId && users.length > 0) {
+             if (!users.find(u => u.id === currentCsmId)) {
+                if (currentUser) setCurrentCsmId(currentUser.id);
             }
         }
-    }, [currentRole, currentUser, users, currentCsmId]);
+    }, [currentCsmId, users, currentRole, currentUser]);
+
 
     const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     
@@ -261,31 +281,6 @@ const AppContent: React.FC = () => {
         return <Login />;
     }
 
-    // Standard User (CSM) specific view
-    if (currentUser.role === 'csm') {
-        return (
-            <>
-                <header className="bg-white shadow-sm mb-8">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                             <h1 className="text-2xl font-bold text-indigo-600">CSM Task Hub</h1>
-                             <SyncStatus />
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <span className="text-sm text-slate-600">Welcome, <span className="font-semibold">{currentUser.name}</span></span>
-                            <Button variant="secondary" onClick={handleLogout}>Logout</Button>
-                        </div>
-                    </div>
-                </header>
-                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-                    {users.length > 0 ? <CSMView csmId={currentUser.id} /> : <p>Loading...</p>}
-                </main>
-                <ApiKeyModal isOpen={isApiKeyModalOpen} onClose={() => setIsApiKeyModalOpen(false)} />
-            </>
-        );
-    }
-
-    // Manager view
     return (
         <>
             <Header 
