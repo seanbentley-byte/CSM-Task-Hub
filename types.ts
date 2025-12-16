@@ -61,6 +61,7 @@ export interface TaskCompletion {
     isCompleted: boolean;
     notes?: string;
     selectedOptions?: string[];
+    selectedOptionLabels?: string[]; // New field
     completedAt?: number;
 }
 

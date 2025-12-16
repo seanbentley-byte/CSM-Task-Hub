@@ -15,6 +15,17 @@ const formatDate = (dateStr: string) => {
     return dateStr;
 };
 
+const formatDateTime = (timestamp: number | undefined) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const HH = String(date.getHours()).padStart(2, '0');
+    const MM = String(date.getMinutes()).padStart(2, '0');
+    return `${mm}/${dd}/${yyyy} ${HH}:${MM}`;
+};
+
 // --- Helper Components for Editable Rows ---
 
 const ActionItemRow: React.FC<{
@@ -85,6 +96,11 @@ const ActionItemRow: React.FC<{
                         <TrashIcon />
                     </button>
                 </div>
+            )}
+            {item.isCompleted && item.completedAt && (
+                 <span className="text-xs text-slate-400 whitespace-nowrap ml-2">
+                    {formatDateTime(item.completedAt)}
+                 </span>
             )}
         </div>
     );
@@ -184,7 +200,7 @@ const BugReportRow: React.FC<{
                 )}
                  {item.isCompleted && item.completedAt && (
                      <span className="text-xs text-slate-400 whitespace-nowrap">
-                        {new Date(item.completedAt).toLocaleDateString()}
+                        {formatDateTime(item.completedAt)}
                      </span>
                 )}
             </div>
@@ -285,7 +301,7 @@ const FeatureRequestRow: React.FC<{
                  )}
                  {item.isCompleted && item.completedAt && (
                      <span className="text-xs text-slate-400 whitespace-nowrap">
-                        {new Date(item.completedAt).toLocaleDateString()}
+                        {formatDateTime(item.completedAt)}
                      </span>
                 )}
             </div>
@@ -299,7 +315,7 @@ const TaskCompletionForm: React.FC<{
     customerId?: string;
     csmId?: string;
     existingCompletion?: TaskCompletion;
-    onSave: (completion: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions'>) => void;
+    onSave: (completion: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions' | 'selectedOptionLabels'>) => void;
     onCancel: () => void;
     canEdit: boolean;
 }> = ({ task, customerId, csmId, existingCompletion, onSave, onCancel, canEdit }) => {
@@ -312,10 +328,17 @@ const TaskCompletionForm: React.FC<{
     const hasMultiSelect = task.csmInputTypes.includes(CSMInputType.MultiSelect);
 
     const handleSave = () => {
-        const completionData: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions'> = {
+        // Resolve labels from IDs for better database readability
+        let selectedOptionLabels: string[] = [];
+        if (hasMultiSelect && task.multiSelectOptions) {
+             selectedOptionLabels = selectedOptions.map(id => task.multiSelectOptions?.find(o => o.id === id)?.label || id);
+        }
+
+        const completionData: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions' | 'selectedOptionLabels'> = {
             isCompleted: hasCheckbox ? isCompleted : (notes.trim() !== '' || selectedOptions.length > 0),
             notes,
             selectedOptions,
+            selectedOptionLabels: selectedOptionLabels.length > 0 ? selectedOptionLabels : undefined
         };
         onSave(completionData);
     };
@@ -393,7 +416,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
         meetingNotes, setMeetingNotes,
         apiKey
     } = useAppContext();
-
+    
     const isCsmView = entityType === 'csm';
     
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -401,55 +424,22 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const [showCompletedBugs, setShowCompletedBugs] = useState(false);
     const [showCompletedFeatures, setShowCompletedFeatures] = useState(false);
     
-    // Notes
     const [currentNotes, setCurrentNotes] = useState('');
     const [isSummarizing, setIsSummarizing] = useState(false);
     const [isSavingNotes, setIsSavingNotes] = useState(false);
-    
-    // Track the last version we pushed to context to avoid overwriting user typing with our own echo
     const lastSavedNotesRef = useRef('');
 
-    // Action Items
     const [newActionItem, setNewActionItem] = useState('');
 
-    // Bug Reports
     const [newBugName, setNewBugName] = useState('');
     const [newBugLink, setNewBugLink] = useState('');
     const [isBugsSectionOpen, setIsBugsSectionOpen] = useState(false);
 
-    // Feature Requests
     const [newFeatureRequest, setNewFeatureRequest] = useState('');
     const [newFeatureLink, setNewFeatureLink] = useState('');
     
-    // Load Notes when Entity Changes or External Updates occur
-    useEffect(() => {
-        const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
-        const remoteText = note?.text || '';
-        
-        // Logic to prevent overwriting user's work with the echo of their own save:
-        // 1. If we just changed entities, always load.
-        // 2. If we are on the same entity, only update IF the remote text is different from what we last saved.
-        //    (This handles external updates from other users/tabs, but ignores our own saved loopback)
-        
-        // Note: We don't have a reliable way to know if 'entityId' just changed inside this specific effect execution 
-        // without another ref, but we can check if remoteText is different from *current* text too? No, current text is being typed.
-        
-        // Simplified approach: Since we track `lastSavedNotesRef`, if remoteText === lastSavedNotesRef, 
-        // it implies the update coming in is just what we pushed.
-        
-        // HOWEVER, when switching entities, `lastSavedNotesRef` is stale (from previous entity).
-        // So we need to reset it.
-        // We'll use a separate effect for entity switching.
-        
-        // But we can't split easily because both depend on meetingNotes/entityId.
-        
-        // Let's use a ref to track current entity ID to detect switch.
-        // See 'Entity Switch Effect' below.
-    }, [meetingNotes, entityId, isCsmView]);
-    
     const prevEntityIdRef = useRef(entityId);
 
-    // Entity Switch Effect: Reset state when switching customers/CSMs
     useEffect(() => {
         if (prevEntityIdRef.current !== entityId) {
             const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
@@ -459,34 +449,25 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
             setEditingTaskId(null);
             prevEntityIdRef.current = entityId;
         } else {
-            // Same entity, check for external updates
             const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
             const remoteText = note?.text || '';
-            
-            // Only update local state if remote is different from what we last successfully saved
-            // This filters out the echo from our own debounce save
             if (remoteText !== lastSavedNotesRef.current) {
-                // External update detected (or initial load finished)
                 setCurrentNotes(remoteText);
                 lastSavedNotesRef.current = remoteText;
             }
         }
     }, [entityId, isCsmView, meetingNotes]);
     
-    // Auto-Save Notes Effect
     useEffect(() => {
-        if (!canEdit) return; // Don't try to save if read-only
+        if (!canEdit) return; 
 
         const note = meetingNotes.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
         const savedText = note?.text || '';
         
-        // Only save if dirty and different from saved
         if (currentNotes !== savedText) {
              setIsSavingNotes(true);
              const timer = setTimeout(() => {
-                // Update the ref right before saving to "claim" this update
                 lastSavedNotesRef.current = currentNotes;
-                
                 setMeetingNotes(prev => {
                     const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
                     if (existing) {
@@ -495,7 +476,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                     return [...prev, { customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, text: currentNotes }];
                 });
                 setIsSavingNotes(false);
-            }, 1000); // 1 second debounce
+            }, 1000); 
 
             return () => clearTimeout(timer);
         } else {
@@ -506,7 +487,6 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
     const entity = isCsmView ? users.find(c => c.id === entityId) : customers.find(c => c.id === entityId);
     
-    // Filter all data for the selected entity
     const entityActionItems = useMemo(() => actionItems.filter(ai => isCsmView ? ai.csmId === entityId : ai.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [actionItems, entityId, isCsmView]);
     const entityBugs = useMemo(() => bugReports.filter(b => isCsmView ? b.csmId === entityId : b.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [bugReports, entityId, isCsmView]);
     const entityFeatures = useMemo(() => featureRequests.filter(fr => isCsmView ? fr.csmId === entityId : fr.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [featureRequests, entityId, isCsmView]);
@@ -518,7 +498,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, entityId, isCsmView]);
 
     const handleSummarizeNotes = async () => {
-        if (!currentNotes || !apiKey || !canEdit) return;
+         if (!currentNotes || !apiKey || !canEdit) return;
         setIsSummarizing(true);
         try {
             const ai = new GoogleGenAI({ apiKey });
@@ -529,8 +509,6 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
             const newText = `${currentNotes}\n\n**AI Summary:**\n${response.text}`;
             setCurrentNotes(newText); 
             lastSavedNotesRef.current = newText;
-            
-            // Trigger immediate save for summary
             setMeetingNotes(prev => {
                 const existing = prev.find(n => (isCsmView ? n.csmId === entityId : n.customerId === entityId));
                 if (existing) {
@@ -547,7 +525,6 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
         }
     };
 
-    // Action Item Handlers
     const handleAddActionItem = (e: React.FormEvent) => {
         e.preventDefault();
         if(!newActionItem.trim()) return;
@@ -580,7 +557,6 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
         }
     }
 
-    // Bug Report Handlers
     const handleAddBug = (e: React.FormEvent) => {
         e.preventDefault();
         if(!newBugName.trim()) return;
@@ -615,9 +591,8 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
         }
     };
     
-    // Feature Request Handlers
      const handleAddFeatureRequest = (e: React.FormEvent) => {
-        e.preventDefault();
+         e.preventDefault();
         if(!newFeatureRequest.trim()) return;
         const newRequest: FeatureRequest = {
             id: `fr_${Date.now()}`,
@@ -650,12 +625,17 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
         }
     };
 
-
-    // Task Completion Handlers
-    const handleSaveCompletion = (taskId: string, completionData: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions'>) => {
+    const handleSaveCompletion = (taskId: string, completionData: Pick<TaskCompletion, 'isCompleted' | 'notes' | 'selectedOptions' | 'selectedOptionLabels'>) => {
         setTaskCompletions(prev => {
             const existingIndex = prev.findIndex(tc => tc.taskId === taskId && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
-            const newCompletion: TaskCompletion = { ...completionData, taskId, customerId: isCsmView ? undefined : entityId, csmId: isCsmView ? entityId : undefined, completedAt: Date.now() };
+            const newCompletion: TaskCompletion = { 
+                ...completionData, 
+                taskId, 
+                customerId: isCsmView ? undefined : entityId, 
+                csmId: isCsmView ? entityId : undefined, 
+                completedAt: Date.now() 
+            };
+            
             if (existingIndex > -1) {
                 const updated = [...prev];
                 updated[existingIndex] = newCompletion;
@@ -916,62 +896,60 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const { customers, users, currentUser } = useAppContext();
-    const [selectedEntityId, setSelectedEntityId] = useState<string>(csmId);
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+
+    const viewingUser = users.find(u => u.id === csmId);
+    const myCustomers = useMemo(() => customers.filter(c => c.assignedCsmId === csmId).sort((a,b) => a.name.localeCompare(b.name)), [customers, csmId]);
     
-    // Determine if we should reset selection when csmId changes
+    // Reset selection if the viewing CSM changes (e.g. via dropdown in header)
     useEffect(() => {
-        setSelectedEntityId(csmId);
+        setSelectedCustomerId(null);
     }, [csmId]);
 
-    const assignedCustomers = useMemo(() => 
-        customers.filter(c => c.assignedCsmId === csmId).sort((a,b) => a.name.localeCompare(b.name)), 
-    [customers, csmId]);
-
-    const csmUser = users.find(u => u.id === csmId);
-    
     const canEdit = useMemo(() => {
         if (!currentUser) return false;
         if (currentUser.role === 'manager') return true;
         if (currentUser.id === csmId) return true;
-        return false; 
+        return false;
     }, [currentUser, csmId]);
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 items-start">
-            <div className="w-full md:w-64 flex-shrink-0 space-y-2">
-                 <div 
-                    onClick={() => setSelectedEntityId(csmId)}
-                    className={`p-3 rounded-md cursor-pointer flex items-center gap-3 transition-colors ${selectedEntityId === csmId ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'}`}
-                >
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold ${selectedEntityId === csmId ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                        {csmUser?.name.charAt(0) || 'U'}
-                    </div>
-                    <span className="font-medium">My Agenda</span>
-                </div>
-
-                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-4 mb-2 pl-1">Customers</div>
-                
-                <div className="space-y-1 max-h-[calc(100vh-250px)] overflow-y-auto pr-1">
-                    {assignedCustomers.map(customer => (
-                        <div 
-                            key={customer.id}
-                            onClick={() => setSelectedEntityId(customer.id)}
-                            className={`p-2 rounded-md cursor-pointer flex items-center justify-between text-sm transition-colors ${selectedEntityId === customer.id ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium' : 'text-slate-600 hover:bg-slate-50 border border-transparent'}`}
+        <div className="flex flex-col md:flex-row gap-6">
+            <div className="w-full md:w-1/4 space-y-4">
+                <Card className="p-4">
+                    <h3 className="font-bold text-slate-700 mb-2 truncate" title={viewingUser?.name}>{viewingUser?.name || 'CSM'}'s Dashboard</h3>
+                     <div className="space-y-1">
+                        <button
+                            onClick={() => setSelectedCustomerId(null)}
+                            className={`w-full text-left px-3 py-2 rounded-md transition-colors ${selectedCustomerId === null ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-600'}`}
                         >
-                            <span className="truncate">{customer.name}</span>
-                        </div>
-                    ))}
-                    {assignedCustomers.length === 0 && (
-                        <div className="text-sm text-slate-400 italic p-2">No customers assigned.</div>
-                    )}
-                </div>
+                            My Personal Tasks
+                        </button>
+                    </div>
+                    
+                    <h4 className="font-semibold text-slate-600 mt-4 mb-2 px-3 text-sm uppercase tracking-wider">Customers</h4>
+                    <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+                        {myCustomers.map(customer => (
+                             <button
+                                key={customer.id}
+                                onClick={() => setSelectedCustomerId(customer.id)}
+                                className={`w-full text-left px-3 py-2 rounded-md transition-colors truncate ${selectedCustomerId === customer.id ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-600'}`}
+                                title={customer.name}
+                            >
+                                {customer.name}
+                            </button>
+                        ))}
+                        {myCustomers.length === 0 && <p className="px-3 text-sm text-slate-400">No customers assigned.</p>}
+                    </div>
+                </Card>
             </div>
-
-            <div className="flex-grow w-full min-w-0">
-                 <Agenda 
-                    entityId={selectedEntityId} 
-                    entityType={selectedEntityId === csmId ? 'csm' : 'customer'} 
-                    canEdit={canEdit} 
+            
+            <div className="w-full md:w-3/4">
+                <Agenda 
+                    key={selectedCustomerId || csmId} 
+                    entityId={selectedCustomerId || csmId} 
+                    entityType={selectedCustomerId ? 'customer' : 'csm'} 
+                    canEdit={canEdit}
                 />
             </div>
         </div>
