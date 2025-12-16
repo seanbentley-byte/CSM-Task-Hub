@@ -136,7 +136,7 @@ const BugReportRow: React.FC<{
                     />
                 </div>
                 <div className="flex justify-end gap-2 mt-2">
-                    <Button variant="secondary" onClick={() => { setIsEditing(false); setName(item.name); setLink(item.ticketLink); }} className="text-xs py-1 px-2 h-8">Cancel</Button>
+                    <Button variant="secondary" onClick={() => { setIsEditing(false); setName(item.name); setLink(item.ticketLink || ''); }} className="text-xs py-1 px-2 h-8">Cancel</Button>
                     <Button onClick={handleSave} className="text-xs py-1 px-2 h-8">Save</Button>
                 </div>
             </div>
@@ -238,7 +238,7 @@ const FeatureRequestRow: React.FC<{
                     />
                 </div>
                 <div className="flex justify-end gap-2 mt-2">
-                    <Button variant="secondary" onClick={() => { setIsEditing(false); setText(item.text); setLink(item.ticketLink); }} className="text-xs py-1 px-2 h-8">Cancel</Button>
+                    <Button variant="secondary" onClick={() => { setIsEditing(false); setText(item.text); setLink(item.ticketLink || ''); }} className="text-xs py-1 px-2 h-8">Cancel</Button>
                     <Button onClick={handleSave} className="text-xs py-1 px-2 h-8">Save</Button>
                 </div>
             </div>
