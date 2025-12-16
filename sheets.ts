@@ -24,17 +24,22 @@ const jsonParse = (val: any) => {
 };
 
 // Date Formatting Helpers
-const formatDateForSheet = (timestamp: number | undefined) => {
+const formatDateForSheet = (timestamp: number | string | undefined) => {
     if (!timestamp) return '';
     const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return ''; // Invalid date check
+    
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const parseDateFromSheet = (val: string | number | undefined) => {
     if (!val) return undefined;
+    // If it's already a number (timestamp), return it
     if (typeof val === 'number') return val;
-    return new Date(val).getTime();
+    // If it's a string, try to parse it
+    const parsed = new Date(val).getTime();
+    return isNaN(parsed) ? 0 : parsed;
 }
 
 export class SheetsService {
@@ -85,13 +90,31 @@ export class SheetsService {
     }
 
     // Completions
-    completionsToRows = (completions: TaskCompletion[]) => {
+    // UPDATED: Now accepts 'tasks' to backfill missing labels
+    completionsToRows = (completions: TaskCompletion[], tasks: Task[]) => {
         const rows = completions.map(tc => {
-            // Save readable response for database visibility
-            const readableResponse = tc.selectedOptionLabels ? jsonStringify(tc.selectedOptionLabels) : '';
+            // Logic to determine readable labels
+            let readableLabels = tc.selectedOptionLabels || [];
+            
+            // If we have IDs but no labels (legacy data), look them up
+            if (readableLabels.length === 0 && tc.selectedOptions && tc.selectedOptions.length > 0) {
+                const task = tasks.find(t => t.id === tc.taskId);
+                if (task && task.multiSelectOptions) {
+                    readableLabels = tc.selectedOptions.map(optId => {
+                        const option = task.multiSelectOptions?.find(o => o.id === optId);
+                        return option ? option.label : optId; // Fallback to ID if not found
+                    });
+                } else {
+                     readableLabels = tc.selectedOptions; // Fallback to IDs if task not found
+                }
+            }
+            
+            // Join with commas for a clean sheet view (e.g. "Happy, Excited")
+            const readableResponseStr = readableLabels.join(', ');
+
             return [
                 tc.taskId, tc.customerId || '', tc.csmId || '', tc.isCompleted, tc.notes || '', 
-                jsonStringify(tc.selectedOptions), readableResponse, formatDateForSheet(tc.completedAt)
+                jsonStringify(tc.selectedOptions), readableResponseStr, formatDateForSheet(tc.completedAt)
             ];
         });
         return [['Task ID', 'Customer ID', 'CSM ID', 'Is Completed', 'Notes', 'Selected Options (IDs)', 'Response Text (Readable)', 'Completed At'], ...rows];
@@ -180,7 +203,8 @@ export class SheetsService {
             [TAB_NAMES.USERS]: this.usersToRows(data.users),
             [TAB_NAMES.CUSTOMERS]: this.customersToRows(data.customers),
             [TAB_NAMES.TASKS]: this.tasksToRows(data.tasks),
-            [TAB_NAMES.COMPLETIONS]: this.completionsToRows(data.completions),
+            // Pass 'tasks' to completionsToRows so it can look up option labels
+            [TAB_NAMES.COMPLETIONS]: this.completionsToRows(data.completions, data.tasks),
             [TAB_NAMES.ACTION_ITEMS]: this.actionItemsToRows(data.actionItems),
             [TAB_NAMES.BUG_REPORTS]: this.bugsToRows(data.bugs),
             [TAB_NAMES.FEATURE_REQUESTS]: this.featuresToRows(data.features),
@@ -191,16 +215,11 @@ export class SheetsService {
             method: 'POST',
             mode: 'no-cors', // Important for GAS Web Apps
             headers: {
-                // 'application/json' is invalid for no-cors mode and causes fetch errors.
-                // Using 'text/plain' prevents CORS preflight requests.
-                // The Apps Script parses the body as JSON regardless of the header.
                 'Content-Type': 'text/plain', 
             },
             body: JSON.stringify(payload)
         });
         
-        // Note: With mode: 'no-cors', we get an opaque response. We cannot check response.ok or response.json().
-        // We assume success if no network error occurred.
         return true;
     }
 
@@ -215,8 +234,6 @@ export class SheetsService {
         }
 
         const data = await response.json();
-        
-        // data structure expected: { [TabName]: any[][] }
         
         return {
             users: this.rowsToUsers(data[TAB_NAMES.USERS]),
