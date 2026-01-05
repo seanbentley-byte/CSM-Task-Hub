@@ -85,12 +85,18 @@ const ObjectiveRow: React.FC<{
                             onClick={e => e.stopPropagation()}
                         />
                     ) : (
-                        <span 
-                            onClick={() => setIsExpanded(!isExpanded)} 
-                            className={`flex-grow text-sm font-medium cursor-pointer ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'}`}
-                        >
-                            {item.text}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2 flex-grow min-w-0" onClick={() => setIsExpanded(!isExpanded)}>
+                            <span 
+                                className={`text-sm font-medium cursor-pointer ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'}`}
+                            >
+                                {item.text}
+                            </span>
+                            {item.dueDate && (
+                                <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase tracking-tight whitespace-nowrap">
+                                    {formatDate(item.dueDate)}
+                                </span>
+                            )}
+                        </div>
                     )}
                 </div>
                 <div className="flex items-center gap-2 ml-2">
@@ -297,7 +303,6 @@ const BugReportRow: React.FC<{
             </div>
             <div className="flex gap-1 items-center ml-2">
                 {canEdit && !item.isCompleted && (
-                    // fix: Changed 'id' to 'item.id' to fix line 300 error.
                      <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-2 h-7 mr-1">Complete</Button>
                 )}
                 
@@ -629,7 +634,6 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
          if (!currentNotes || !canEdit) return;
         setIsSummarizing(true);
         try {
-            // fix: Updated AI initialization and model name according to guidelines.
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',

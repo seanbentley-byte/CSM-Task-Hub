@@ -45,7 +45,6 @@ const AITaskModal: React.FC<{
         setError('');
 
         try {
-            // fix: Updated AI initialization to use process.env.API_KEY and correct model according to guidelines.
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-pro-preview',
@@ -557,6 +556,99 @@ const DashboardStats: React.FC = () => {
     )
 };
 
+const TaskRow: React.FC<{
+    task: Task;
+    onEdit: (task: Task) => void;
+    onArchive: (id: string) => void;
+    onExport: (task: Task) => void;
+    onDelete: (id: string) => void;
+    completionPercent: number;
+    isExpanded: boolean;
+    onToggleExpand: () => void;
+}> = ({ task, onEdit, onArchive, onExport, onDelete, completionPercent, isExpanded, onToggleExpand }) => {
+    const { setTasks } = useAppContext();
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [titleValue, setTitleValue] = useState(task.title);
+
+    const handleSaveTitle = () => {
+        if (titleValue.trim() && titleValue !== task.title) {
+            setTasks(prev => prev.map(t => t.id === task.id ? { ...t, title: titleValue.trim() } : t));
+        } else {
+            setTitleValue(task.title);
+        }
+        setIsEditingTitle(false);
+    };
+
+    const isOverdue = (dueDate: string) => new Date(dueDate) < new Date() && !dueDate.includes('1970');
+
+    const getCategoryColor = (category: TaskCategory) => {
+        switch (category) {
+            case TaskCategory.Announcement: return 'bg-blue-100 text-blue-800';
+            case TaskCategory.FeatureRelease: return 'bg-purple-100 text-purple-800';
+            case TaskCategory.Bug: return 'bg-red-100 text-red-800';
+            case TaskCategory.QuestionOfTheWeek: return 'bg-yellow-100 text-yellow-800';
+            default: return 'bg-slate-100 text-slate-800';
+        }
+    };
+
+    return (
+        <div className="border border-slate-200 rounded-lg p-4">
+            <div className="flex justify-between items-start">
+                <div className="flex-grow">
+                    <div className="flex items-center gap-3">
+                         <Tag color={getCategoryColor(task.category)}>{task.category}</Tag>
+                         {isEditingTitle ? (
+                             <input 
+                                autoFocus
+                                className="text-lg font-semibold text-slate-800 border-b-2 border-indigo-500 focus:outline-none bg-transparent flex-grow max-w-md"
+                                value={titleValue}
+                                onChange={e => setTitleValue(e.target.value)}
+                                onBlur={handleSaveTitle}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') handleSaveTitle();
+                                    if (e.key === 'Escape') {
+                                        setTitleValue(task.title);
+                                        setIsEditingTitle(false);
+                                    }
+                                }}
+                             />
+                         ) : (
+                             <h3 
+                                className="text-lg font-semibold text-slate-800 cursor-pointer hover:text-indigo-600 transition-colors"
+                                onClick={() => setIsEditingTitle(true)}
+                                title="Click to edit title"
+                             >
+                                {task.title}
+                             </h3>
+                         )}
+                    </div>
+                    <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
+                    <div className="flex items-center gap-4 text-sm mt-2 text-slate-600">
+                        <span className={`font-semibold ${isOverdue(task.dueDate) && completionPercent < 100 ? 'text-red-500' : ''}`}>Due: {formatDate(task.dueDate)}</span>
+                        <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignmentType === 'csm' ? `${task.assignedCsmIds?.length || 0} Users` : `${task.assignedCustomerIds.length} Customers`}</span></span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                    <div className="w-32 text-center">
+                        <div className="bg-slate-200 rounded-full h-2.5">
+                            <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${completionPercent}%` }}></div>
+                        </div>
+                        <p className="text-sm text-slate-600 mt-1">{completionPercent.toFixed(0)}% Complete</p>
+                    </div>
+                    <Button variant="secondary" onClick={() => onEdit(task)} className="px-2 py-1" title="Edit Task Details"><PencilIcon/></Button>
+                    <Button variant="secondary" onClick={() => onArchive(task.id)} className="px-2 py-1" title={task.isArchived ? "Unarchive" : "Archive"}><ArchiveIcon/></Button>
+                    <Button variant="secondary" onClick={() => onExport(task)} className="px-2 py-1" title="Export to CSV"><DownloadIcon/></Button>
+                    <Button variant="danger" onClick={() => onDelete(task.id)} className="px-2 py-1" title="Delete Task"><TrashIcon/></Button>
+                    <button onClick={onToggleExpand} className={`p-1 rounded-full hover:bg-slate-100 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                        <ChevronDownIcon />
+                    </button>
+                </div>
+            </div>
+            {isExpanded && <TaskDetails task={task} />}
+        </div>
+    );
+};
+
 
 const ManagerView: React.FC = () => {
     const { tasks, setTasks, taskCompletions, setTaskCompletions, customers, users } = useAppContext();
@@ -665,18 +757,6 @@ const ManagerView: React.FC = () => {
         document.body.removeChild(link);
     };
 
-    const getCategoryColor = (category: TaskCategory) => {
-        switch (category) {
-            case TaskCategory.Announcement: return 'bg-blue-100 text-blue-800';
-            case TaskCategory.FeatureRelease: return 'bg-purple-100 text-purple-800';
-            case TaskCategory.Bug: return 'bg-red-100 text-red-800';
-            case TaskCategory.QuestionOfTheWeek: return 'bg-yellow-100 text-yellow-800';
-            default: return 'bg-slate-100 text-slate-800';
-        }
-    }
-    
-    const isOverdue = (dueDate: string) => new Date(dueDate) < new Date() && !dueDate.includes('1970');
-
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -716,42 +796,19 @@ const ManagerView: React.FC = () => {
 
                 <h2 className="text-xl font-semibold text-slate-700 mb-4">{showArchived ? "Archived Tasks" : "Active Tasks"}</h2>
                 <div className="space-y-4">
-                    {filteredTasks.map(task => {
-                        const completionPercent = getTaskCompletionPercent(task);
-                        return (
-                            <div key={task.id} className="border border-slate-200 rounded-lg p-4">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <div className="flex items-center gap-3">
-                                             <Tag color={getCategoryColor(task.category)}>{task.category}</Tag>
-                                             <h3 className="text-lg font-semibold text-slate-800">{task.title}</h3>
-                                        </div>
-                                        <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
-                                        <div className="flex items-center gap-4 text-sm mt-2 text-slate-600">
-                                            <span className={`font-semibold ${isOverdue(task.dueDate) && completionPercent < 100 ? 'text-red-500' : ''}`}>Due: {formatDate(task.dueDate)}</span>
-                                            <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignmentType === 'csm' ? `${task.assignedCsmIds?.length || 0} Users` : `${task.assignedCustomerIds.length} Customers`}</span></span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                                        <div className="w-32 text-center">
-                                            <div className="bg-slate-200 rounded-full h-2.5">
-                                                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${completionPercent}%` }}></div>
-                                            </div>
-                                            <p className="text-sm text-slate-600 mt-1">{completionPercent.toFixed(0)}% Complete</p>
-                                        </div>
-                                        <Button variant="secondary" onClick={() => handleEditTask(task)} className="px-2 py-1" title="Edit Task"><PencilIcon/></Button>
-                                        <Button variant="secondary" onClick={() => handleArchiveTask(task.id)} className="px-2 py-1" title={task.isArchived ? "Unarchive" : "Archive"}><ArchiveIcon/></Button>
-                                        <Button variant="secondary" onClick={() => handleExportTask(task)} className="px-2 py-1" title="Export to CSV"><DownloadIcon/></Button>
-                                        <Button variant="danger" onClick={() => handleDeleteTask(task.id)} className="px-2 py-1" title="Delete Task"><TrashIcon/></Button>
-                                        <button onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)} className={`p-1 rounded-full hover:bg-slate-100 transition-transform ${expandedTaskId === task.id ? 'rotate-180' : ''}`}>
-                                            <ChevronDownIcon />
-                                        </button>
-                                    </div>
-                                </div>
-                                {expandedTaskId === task.id && <TaskDetails task={task} />}
-                            </div>
-                        )
-                    })}
+                    {filteredTasks.map(task => (
+                        <TaskRow 
+                            key={task.id}
+                            task={task}
+                            onEdit={handleEditTask}
+                            onArchive={handleArchiveTask}
+                            onExport={handleExportTask}
+                            onDelete={handleDeleteTask}
+                            completionPercent={getTaskCompletionPercent(task)}
+                            isExpanded={expandedTaskId === task.id}
+                            onToggleExpand={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+                        />
+                    ))}
                      {filteredTasks.length === 0 && <p className="text-center text-slate-500 py-4">No tasks match the current filters.</p>}
                 </div>
             </Card>
