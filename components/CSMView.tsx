@@ -28,7 +28,7 @@ const formatDateTime = (timestamp: number | undefined) => {
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     const yyyy = date.getFullYear();
-    // Removed time components as requested
+    // Only return date portion as requested
     return `${mm}/${dd}/${yyyy}`;
 };
 
@@ -496,11 +496,15 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const entityActionItems = useMemo(() => actionItems.filter(ai => isCsmView ? ai.csmId === entityId : ai.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [actionItems, entityId, isCsmView]);
     const entityBugs = useMemo(() => bugReports.filter(b => isCsmView ? b.csmId === entityId : b.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [bugReports, entityId, isCsmView]);
     const entityFeatures = useMemo(() => featureRequests.filter(fr => isCsmView ? fr.csmId === entityId : fr.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [featureRequests, entityId, isCsmView]);
+    
+    // EXPLICIT FILTER: Exclude archived tasks from the CSM view
     const managerTasks = useMemo(() => tasks.filter(t => {
+        if (t.isArchived) return false;
+        
         if (isCsmView) {
-            return !t.isArchived && t.assignmentType === 'csm' && t.assignedCsmIds?.includes(entityId)
+            return t.assignmentType === 'csm' && t.assignedCsmIds?.includes(entityId)
         }
-        return !t.isArchived && t.assignmentType === 'customer' && t.assignedCustomerIds.includes(entityId)
+        return t.assignmentType === 'customer' && t.assignedCustomerIds.includes(entityId)
     }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, entityId, isCsmView]);
 
     const handleSummarizeNotes = async () => {

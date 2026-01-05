@@ -5,7 +5,7 @@ import { useAppContext } from './AppContext';
 import { Card, Button, Modal, Tag, PlusIcon, ArchiveIcon, ChevronDownIcon, CheckCircleIcon, UsersIcon, PencilIcon, SearchIcon, TrashIcon, DownloadIcon, MarkdownRenderer, SparklesIcon } from './ui';
 import { GoogleGenAI, Type } from '@google/genai';
 
-// Date Formatter Helper (copied from CSMView for consistency)
+// Date Formatter Helper (consistent with CSMView)
 const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
     
@@ -623,6 +623,7 @@ const ManagerView: React.FC = () => {
     const handleDeleteTask = (taskId: string) => {
         if (window.confirm('Are you sure you want to permanently delete this task and all its completion data?')) {
             setTasks(prev => prev.filter(t => t.id !== taskId));
+            // Cleanup completions associated with this task
             setTaskCompletions(prev => prev.filter(tc => tc.taskId !== taskId));
         }
     };
