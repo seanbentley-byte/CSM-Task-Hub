@@ -1,11 +1,12 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react';
-import { Task, Customer, User, TaskCompletion, ActionItem, BugReport, FeatureRequest, MeetingNote, AuthenticatedUser, GoogleSheetsConfig } from '../types';
+import { Task, Customer, User, TaskCompletion, Objective, ActionItem, BugReport, FeatureRequest, MeetingNote, AuthenticatedUser, GoogleSheetsConfig } from '../types';
 import { 
     tasks as initialTasks, 
     customers as initialCustomers, 
     users as initialUsers, 
     taskCompletions as initialTaskCompletions,
+    initialObjectives,
     initialActionItems,
     initialBugReports,
     initialFeatureRequests,
@@ -22,6 +23,8 @@ interface AppContextType {
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
     taskCompletions: TaskCompletion[];
     setTaskCompletions: React.Dispatch<React.SetStateAction<TaskCompletion[]>>;
+    objectives: Objective[];
+    setObjectives: React.Dispatch<React.SetStateAction<Objective[]>>;
     actionItems: ActionItem[];
     setActionItems: React.Dispatch<React.SetStateAction<ActionItem[]>>;
     bugReports: BugReport[];
@@ -81,6 +84,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [customers, setCustomers] = useStickyState<Customer[]>('csm_customers', initialCustomers);
     const [users, setUsers] = useStickyState<User[]>('csm_users', initialUsers);
     const [taskCompletions, setTaskCompletions] = useStickyState<TaskCompletion[]>('csm_completions', initialTaskCompletions);
+    const [objectives, setObjectives] = useStickyState<Objective[]>('csm_objectives', initialObjectives);
     const [actionItems, setActionItems] = useStickyState<ActionItem[]>('csm_actionItems', initialActionItems);
     const [bugReports, setBugReports] = useStickyState<BugReport[]>('csm_bugReports', initialBugReports);
     const [featureRequests, setFeatureRequests] = useStickyState<FeatureRequest[]>('csm_featureRequests', initialFeatureRequests);
@@ -171,17 +175,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (direction === 'push') {
                 await sheetsService.syncToSheets(sheetsConfig.webAppUrl, {
                     users, customers, tasks, completions: taskCompletions,
-                    actionItems, bugs: bugReports, features: featureRequests, notes: meetingNotes
+                    objectives, actionItems, bugs: bugReports, features: featureRequests, notes: meetingNotes
                 });
                 setHasUnsavedChanges(false);
             } else {
                 const data = await sheetsService.loadFromSheets(sheetsConfig.webAppUrl);
                 
-                // We update state here. The Dirty Checking Effect will run after these updates.
-                // Because isSyncingRef.current is true, it will ignore these updates.
-                
                 if (data.users) {
-                     // Ensure hardcoded user remains even after sync
                      const hardcodedManager = initialUsers.find(u => u.id === 'csm_1');
                      if (hardcodedManager && !data.users.find(u => u.id === hardcodedManager.id)) {
                          data.users.unshift(hardcodedManager);
@@ -191,6 +191,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (data.customers) setCustomers(data.customers);
                 if (data.tasks) setTasks(data.tasks);
                 if (data.taskCompletions) setTaskCompletions(data.taskCompletions);
+                if (data.objectives) setObjectives(data.objectives);
                 if (data.actionItems) setActionItems(data.actionItems);
                 if (data.bugReports) setBugReports(data.bugReports);
                 if (data.featureRequests) setFeatureRequests(data.featureRequests);
@@ -201,56 +202,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setLastSyncTime(Date.now());
         } catch (error) {
             console.error("Sync Error", error);
-            // Don't alert on auto-saves to avoid disrupting user
             if (direction === 'pull') {
                  console.log("Sync Failed - this may be due to network issues or Apps Script limits.");
             }
         } finally {
             setIsSyncing(false);
         }
-    }, [sheetsConfig, isSheetConnected, users, customers, tasks, taskCompletions, actionItems, bugReports, featureRequests, meetingNotes]);
+    }, [sheetsConfig, isSheetConnected, users, customers, tasks, taskCompletions, objectives, actionItems, bugReports, featureRequests, meetingNotes]);
 
 
     // --- Initial Load Effect ---
-    // Runs when connection is established and we haven't synced yet (e.g., on app load)
     useEffect(() => {
         if (isSheetConnected && !lastSyncTime) {
-            console.log("Initial load from Sheet...");
             syncData('pull');
         }
     }, [isSheetConnected, lastSyncTime, syncData]);
 
 
     // --- Dirty Checking Effect ---
-    // Watches all data arrays. If they change AND we aren't currently syncing (loading data), mark as dirty.
     useEffect(() => {
-        // Prevent marking dirty on initial render
         if (isFirstRender.current) {
             isFirstRender.current = false;
             return;
         }
 
         if (!isSheetConnected) return;
-        
-        // If the change was triggered by a sync operation, ignore it.
         if (isSyncingRef.current) return;
 
         setHasUnsavedChanges(true);
         lastChangeTimeRef.current = Date.now();
 
-    }, [tasks, customers, users, taskCompletions, actionItems, bugReports, featureRequests, meetingNotes, isSheetConnected]);
+    }, [tasks, customers, users, taskCompletions, objectives, actionItems, bugReports, featureRequests, meetingNotes, isSheetConnected]);
 
 
     // --- Auto-Save Interval ---
-    // Checks every 5 seconds. If dirty and last change was > 10 seconds ago, save.
     useEffect(() => {
         if (!isSheetConnected) return;
 
         const interval = setInterval(() => {
             const timeSinceLastChange = Date.now() - lastChangeTimeRef.current;
-            // Debounce: Wait 10 seconds after last edit before saving
             if (hasUnsavedChanges && !isSyncingRef.current && timeSinceLastChange > 10000) {
-                console.log('Auto-saving...');
                 syncData('push');
             }
         }, 5000); 
@@ -258,14 +249,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return () => clearInterval(interval);
     }, [hasUnsavedChanges, isSheetConnected, syncData]);
 
-    // Removed Auto-Load Interval to prevent data overwrites and improve performance.
-    // Sync will now only happen on initial load, manual trigger, or push (save).
-
     const value = {
         tasks, setTasks,
         customers, setCustomers,
         users, setUsers,
         taskCompletions, setTaskCompletions,
+        objectives, setObjectives,
         actionItems, setActionItems,
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,

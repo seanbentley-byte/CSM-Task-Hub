@@ -67,6 +67,7 @@ const SettingsView: React.FC = () => {
         users, setUsers, 
         customers, setCustomers,
         setTaskCompletions,
+        setObjectives,
         setActionItems,
         setBugReports,
         setFeatureRequests,
@@ -204,6 +205,7 @@ const SettingsView: React.FC = () => {
         if (window.confirm('Are you sure? This will delete the customer and all their associated data (task completions, notes, bugs, etc.).')) {
             setCustomers(prev => prev.filter(c => c.id !== customerId));
             setTaskCompletions(prev => prev.filter(tc => tc.customerId !== customerId));
+            setObjectives(prev => prev.filter(o => o.customerId !== customerId));
             setActionItems(prev => prev.filter(ai => ai.customerId !== customerId));
             setBugReports(prev => prev.filter(b => b.customerId !== customerId));
             setFeatureRequests(prev => prev.filter(fr => fr.customerId !== customerId));
@@ -362,7 +364,6 @@ const SettingsView: React.FC = () => {
                 </Card>
             </div>
 
-             {/* Google Sheets Integration */}
              <Card className="border-indigo-200 ring-4 ring-indigo-50 transition-all duration-300">
                 <div 
                     className="flex items-center justify-between cursor-pointer"

@@ -1,5 +1,5 @@
 
-import { User, Customer, Task, TaskCompletion, ActionItem, BugReport, FeatureRequest, MeetingNote } from './types';
+import { User, Customer, Task, TaskCompletion, Objective, ActionItem, BugReport, FeatureRequest, MeetingNote } from './types';
 
 // Map data types to Sheet Tab Names
 export const TAB_NAMES = {
@@ -7,6 +7,7 @@ export const TAB_NAMES = {
     CUSTOMERS: 'Customers',
     TASKS: 'Tasks',
     COMPLETIONS: 'TaskCompletions',
+    OBJECTIVES: 'Objectives',
     ACTION_ITEMS: 'ActionItems',
     BUG_REPORTS: 'BugReports',
     FEATURE_REQUESTS: 'FeatureRequests',
@@ -35,9 +36,7 @@ const formatDateForSheet = (timestamp: number | string | undefined) => {
 
 const parseDateFromSheet = (val: string | number | undefined) => {
     if (!val) return undefined;
-    // If it's already a number (timestamp), return it
     if (typeof val === 'number') return val;
-    // If it's a string, try to parse it
     const parsed = new Date(val).getTime();
     return isNaN(parsed) ? 0 : parsed;
 }
@@ -53,7 +52,6 @@ export class SheetsService {
     constructor() {}
 
     // --- Data Transformation Methods ---
-    // These convert between App Objects and 2D Arrays (Rows)
 
     // Users
     usersToRows = (users: User[]) => {
@@ -96,26 +94,20 @@ export class SheetsService {
     }
 
     // Completions
-    // UPDATED: Now accepts 'tasks' to backfill missing labels
     completionsToRows = (completions: TaskCompletion[], tasks: Task[]) => {
         const rows = completions.map(tc => {
-            // Logic to determine readable labels
             let readableLabels = tc.selectedOptionLabels || [];
-            
-            // If we have IDs but no labels (legacy data), look them up
             if (readableLabels.length === 0 && tc.selectedOptions && tc.selectedOptions.length > 0) {
                 const task = tasks.find(t => t.id === tc.taskId);
                 if (task && task.multiSelectOptions) {
                     readableLabels = tc.selectedOptions.map(optId => {
                         const option = task.multiSelectOptions?.find(o => o.id === optId);
-                        return option ? option.label : optId; // Fallback to ID if not found
+                        return option ? option.label : optId;
                     });
                 } else {
-                     readableLabels = tc.selectedOptions; // Fallback to IDs if task not found
+                     readableLabels = tc.selectedOptions;
                 }
             }
-            
-            // Join with commas for a clean sheet view (e.g. "Happy, Excited")
             const readableResponseStr = readableLabels.join(', ');
 
             return [
@@ -131,8 +123,22 @@ export class SheetsService {
             taskId: r[0], customerId: r[1] || undefined, csmId: r[2] || undefined, 
             isCompleted: r[3] === 'TRUE' || r[3] === true, notes: r[4], 
             selectedOptions: jsonParse(r[5]), 
-            // Skip r[6] (Readable Response) during import as it's for display only
             completedAt: parseDateFromSheet(r[7])
+        }));
+    }
+
+    // Objectives
+    objectivesToRows = (objectives: Objective[]) => {
+        const rows = objectives.map(o => [
+            o.id, o.customerId || '', o.csmId || '', o.text, o.dueDate || '', o.isCompleted, formatDateForSheet(o.completedAt), formatDateForSheet(o.createdAt)
+        ]);
+        return [['ID', 'Customer ID', 'CSM ID', 'Text', 'Due Date', 'Is Completed', 'Completed At', 'Created At'], ...rows];
+    }
+    rowsToObjectives = (rows: any[][]): Objective[] => {
+        if (!rows || rows.length < 2) return [];
+        return rows.slice(1).map(r => ({
+            id: r[0], customerId: r[1] || undefined, csmId: r[2] || undefined, text: r[3], dueDate: r[4] || undefined,
+            isCompleted: r[5] === 'TRUE' || r[5] === true, completedAt: parseDateFromSheet(r[6]), createdAt: parseDateFromSheet(r[7]) || 0
         }));
     }
 
@@ -195,22 +201,21 @@ export class SheetsService {
         }));
     }
 
-    // --- API Calls (using Google Apps Script Web App) ---
+    // --- API Calls ---
 
     syncToSheets = async (
         webAppUrl: string, 
         data: {
             users: User[], customers: Customer[], tasks: Task[], completions: TaskCompletion[],
-            actionItems: ActionItem[], bugs: BugReport[], features: FeatureRequest[], notes: MeetingNote[]
+            objectives: Objective[], actionItems: ActionItem[], bugs: BugReport[], features: FeatureRequest[], notes: MeetingNote[]
         }
     ) => {
-        // Construct payload where keys are Tab Names and values are 2D arrays
         const payload = {
             [TAB_NAMES.USERS]: this.usersToRows(data.users),
             [TAB_NAMES.CUSTOMERS]: this.customersToRows(data.customers),
             [TAB_NAMES.TASKS]: this.tasksToRows(data.tasks),
-            // Pass 'tasks' to completionsToRows so it can look up option labels
             [TAB_NAMES.COMPLETIONS]: this.completionsToRows(data.completions, data.tasks),
+            [TAB_NAMES.OBJECTIVES]: this.objectivesToRows(data.objectives),
             [TAB_NAMES.ACTION_ITEMS]: this.actionItemsToRows(data.actionItems),
             [TAB_NAMES.BUG_REPORTS]: this.bugsToRows(data.bugs),
             [TAB_NAMES.FEATURE_REQUESTS]: this.featuresToRows(data.features),
@@ -219,7 +224,7 @@ export class SheetsService {
 
         const response = await fetch(webAppUrl, {
             method: 'POST',
-            mode: 'no-cors', // Important for GAS Web Apps
+            mode: 'no-cors',
             headers: {
                 'Content-Type': 'text/plain', 
             },
@@ -246,6 +251,7 @@ export class SheetsService {
             customers: this.rowsToCustomers(data[TAB_NAMES.CUSTOMERS]),
             tasks: this.rowsToTasks(data[TAB_NAMES.TASKS]),
             taskCompletions: this.rowsToCompletions(data[TAB_NAMES.COMPLETIONS]),
+            objectives: this.rowsToObjectives(data[TAB_NAMES.OBJECTIVES]),
             actionItems: this.rowsToActionItems(data[TAB_NAMES.ACTION_ITEMS]),
             bugReports: this.rowsToBugs(data[TAB_NAMES.BUG_REPORTS]),
             featureRequests: this.rowsToFeatures(data[TAB_NAMES.FEATURE_REQUESTS]),

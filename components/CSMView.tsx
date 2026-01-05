@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon, MarkdownRenderer, PencilIcon } from './ui';
-import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest } from '../types';
+import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest, Objective } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
 const formatDate = (dateStr: string) => {
@@ -33,6 +33,114 @@ const formatDateTime = (timestamp: number | undefined) => {
 };
 
 // --- Helper Components for Editable Rows ---
+
+const ObjectiveRow: React.FC<{
+    item: Objective;
+    onToggle: (id: string, currentStatus: boolean) => void;
+    onDelete: (id: string) => void;
+    onUpdate: (id: string, text: string) => void;
+    canEdit: boolean;
+}> = ({ item, onToggle, onDelete, onUpdate, canEdit }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [text, setText] = useState(item.text);
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    const handleSave = () => {
+        if (text.trim()) {
+            onUpdate(item.id, text.trim());
+        } else {
+            setText(item.text);
+        }
+        setIsEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') handleSave();
+        if (e.key === 'Escape') {
+            setText(item.text);
+            setIsEditing(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col bg-white rounded-md border border-slate-200 overflow-hidden transition-all duration-200">
+            <div className={`flex items-center justify-between p-3 ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50'}`}>
+                <div className="flex items-center flex-grow gap-3 min-w-0">
+                    <input 
+                        type="checkbox" 
+                        checked={item.isCompleted} 
+                        onChange={(e) => { e.stopPropagation(); onToggle(item.id, item.isCompleted); }} 
+                        disabled={!canEdit} 
+                        className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 flex-shrink-0" 
+                    />
+                    
+                    {isEditing ? (
+                        <input 
+                            autoFocus
+                            value={text} 
+                            onChange={e => setText(e.target.value)} 
+                            onBlur={handleSave}
+                            onKeyDown={handleKeyDown}
+                            className="flex-grow p-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            onClick={e => e.stopPropagation()}
+                        />
+                    ) : (
+                        <span 
+                            onClick={() => setIsExpanded(!isExpanded)} 
+                            className={`flex-grow text-sm font-medium cursor-pointer ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'}`}
+                        >
+                            {item.text}
+                        </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2 ml-2">
+                    {canEdit && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                             {!isEditing && !item.isCompleted && (
+                                <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="text-slate-400 hover:text-indigo-600 p-1">
+                                    <PencilIcon />
+                                </button>
+                            )}
+                            <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="text-slate-400 hover:text-red-600 p-1">
+                                <TrashIcon />
+                            </button>
+                        </div>
+                    )}
+                    <button 
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className={`text-slate-400 hover:text-indigo-600 p-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                    >
+                        <ChevronDownIcon />
+                    </button>
+                </div>
+            </div>
+            
+            {/* Expanded Content */}
+            {isExpanded && (
+                <div className="px-10 pb-3 pt-1 border-t border-slate-100 bg-slate-50 animate-fadeIn">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Added</span>
+                            <p className="text-xs text-slate-600">{formatDateTime(item.createdAt)}</p>
+                        </div>
+                        {item.dueDate && (
+                            <div>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target Date</span>
+                                <p className="text-xs text-slate-600">{formatDate(item.dueDate)}</p>
+                            </div>
+                        )}
+                        {item.isCompleted && item.completedAt && (
+                             <div className="col-span-2">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Completed On</span>
+                                <p className="text-xs text-green-600">{formatDateTime(item.completedAt)}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const ActionItemRow: React.FC<{
     item: ActionItem;
@@ -334,7 +442,6 @@ const TaskCompletionForm: React.FC<{
     const hasMultiSelect = task.csmInputTypes.includes(CSMInputType.MultiSelect);
 
     const handleSave = () => {
-        // Resolve labels from IDs for better database readability
         let selectedOptionLabels: string[] = [];
         if (hasMultiSelect && task.multiSelectOptions) {
              selectedOptionLabels = selectedOptions.map(id => task.multiSelectOptions?.find(o => o.id === id)?.label || id);
@@ -357,7 +464,6 @@ const TaskCompletionForm: React.FC<{
 
     return (
         <div className="mt-2 p-4 bg-slate-50 rounded-lg space-y-4 border border-slate-200">
-            {/* Show description in context while editing */}
             <div className="bg-white p-3 rounded border border-slate-100">
                 <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Task Description</h5>
                 <MarkdownRenderer content={task.description} className="text-sm text-slate-700" />
@@ -416,6 +522,7 @@ const TaskCompletionForm: React.FC<{
 const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEdit: boolean }> = ({ entityId, entityType, canEdit }) => {
     const { 
         customers, users, tasks, taskCompletions, setTaskCompletions,
+        objectives, setObjectives,
         actionItems, setActionItems,
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,
@@ -429,11 +536,15 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const [showOlderCompleted, setShowOlderCompleted] = useState(false);
     const [showCompletedBugs, setShowCompletedBugs] = useState(false);
     const [showCompletedFeatures, setShowCompletedFeatures] = useState(false);
+    const [showArchivedObjectives, setShowArchivedObjectives] = useState(false);
     
     const [currentNotes, setCurrentNotes] = useState('');
     const [isSummarizing, setIsSummarizing] = useState(false);
     const [isSavingNotes, setIsSavingNotes] = useState(false);
     const lastSavedNotesRef = useRef('');
+
+    const [newObjective, setNewObjective] = useState('');
+    const [objectiveDate, setObjectiveDate] = useState('');
 
     const [newActionItem, setNewActionItem] = useState('');
 
@@ -493,11 +604,11 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
     const entity = isCsmView ? users.find(c => c.id === entityId) : customers.find(c => c.id === entityId);
     
+    const entityObjectives = useMemo(() => objectives.filter(o => isCsmView ? o.csmId === entityId : o.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [objectives, entityId, isCsmView]);
     const entityActionItems = useMemo(() => actionItems.filter(ai => isCsmView ? ai.csmId === entityId : ai.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [actionItems, entityId, isCsmView]);
     const entityBugs = useMemo(() => bugReports.filter(b => isCsmView ? b.csmId === entityId : b.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [bugReports, entityId, isCsmView]);
     const entityFeatures = useMemo(() => featureRequests.filter(fr => isCsmView ? fr.csmId === entityId : fr.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [featureRequests, entityId, isCsmView]);
     
-    // EXPLICIT FILTER: Exclude archived tasks from the CSM view
     const managerTasks = useMemo(() => tasks.filter(t => {
         if (t.isArchived) return false;
         
@@ -534,6 +645,40 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
             setIsSummarizing(false);
         }
     };
+
+    const handleAddObjective = (e: React.FormEvent) => {
+        e.preventDefault();
+        if(!newObjective.trim()) return;
+        const newItem: Objective = {
+            id: `obj_${Date.now()}`,
+            customerId: isCsmView ? undefined : entityId,
+            csmId: isCsmView ? entityId : undefined,
+            text: newObjective.trim(),
+            dueDate: objectiveDate || undefined,
+            isCompleted: false,
+            createdAt: Date.now()
+        };
+        setObjectives(prev => [newItem, ...prev]);
+        setNewObjective('');
+        setObjectiveDate('');
+    };
+
+    const handleToggleObjective = (id: string, isCompleted: boolean) => {
+        if (!canEdit) return;
+        setObjectives(prev => prev.map(o => o.id === id ? { ...o, isCompleted: !isCompleted, completedAt: !isCompleted ? Date.now() : undefined } : o));
+    };
+
+    const handleUpdateObjective = (id: string, text: string) => {
+        if (!canEdit) return;
+        setObjectives(prev => prev.map(o => o.id === id ? { ...o, text } : o));
+    };
+
+    const handleDeleteObjective = (id: string) => {
+        if (!canEdit) return;
+        if(window.confirm('Are you sure you want to delete this objective?')) {
+            setObjectives(prev => prev.filter(o => o.id !== id));
+        }
+    }
 
     const handleAddActionItem = (e: React.FormEvent) => {
         e.preventDefault();
@@ -657,6 +802,9 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     };
 
     // Rendering Logic
+    const activeObjectives = entityObjectives.filter(o => !o.isCompleted);
+    const completedObjectives = entityObjectives.filter(o => o.isCompleted);
+
     const incompleteActionItems = entityActionItems.filter(ai => !ai.isCompleted);
     const completedActionItems = entityActionItems.filter(ai => ai.isCompleted);
     const visibleCompleted = showOlderCompleted ? completedActionItems : completedActionItems.slice(0, 3);
@@ -671,6 +819,70 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
     return (
         <div className="flex-grow space-y-4 pb-8">
+            {/* NEW OBJECTIVES SECTION */}
+            <Card className="border-l-4 border-l-indigo-600">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-slate-800">Objectives ({activeObjectives.length})</h2>
+                </div>
+                {canEdit && (
+                    <form onSubmit={handleAddObjective} className="flex flex-col sm:flex-row gap-2 mb-6 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                        <input 
+                            type="text" 
+                            value={newObjective} 
+                            onChange={e => setNewObjective(e.target.value)} 
+                            placeholder="Set a new objective..." 
+                            className="flex-grow p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" 
+                        />
+                        <input 
+                            type="date" 
+                            value={objectiveDate} 
+                            onChange={e => setObjectiveDate(e.target.value)} 
+                            className="p-2 border rounded-md text-sm text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                        />
+                        <Button type="submit">Set</Button>
+                    </form>
+                )}
+                <div className="space-y-3">
+                    {activeObjectives.map(obj => (
+                        <ObjectiveRow 
+                            key={obj.id} 
+                            item={obj} 
+                            onToggle={handleToggleObjective} 
+                            onDelete={handleDeleteObjective} 
+                            onUpdate={handleUpdateObjective}
+                            canEdit={canEdit} 
+                        />
+                    ))}
+                    {activeObjectives.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No active objectives.</p>}
+                </div>
+                
+                {completedObjectives.length > 0 && (
+                    <div className="mt-6">
+                        <button 
+                            onClick={() => setShowArchivedObjectives(!showArchivedObjectives)}
+                            className="flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-wider"
+                        >
+                            <ChevronDownIcon className={`transform transition-transform ${showArchivedObjectives ? 'rotate-180' : ''}`} />
+                            Archived Objectives ({completedObjectives.length})
+                        </button>
+                        {showArchivedObjectives && (
+                            <div className="mt-3 space-y-2 animate-fadeIn">
+                                {completedObjectives.map(obj => (
+                                    <ObjectiveRow 
+                                        key={obj.id} 
+                                        item={obj} 
+                                        onToggle={handleToggleObjective} 
+                                        onDelete={handleDeleteObjective} 
+                                        onUpdate={handleUpdateObjective}
+                                        canEdit={canEdit} 
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Card>
+
             <Card>
                 <h2 className="text-xl font-bold text-slate-800 mb-2">Action Items ({incompleteActionItems.length})</h2>
                 {canEdit && (
@@ -839,7 +1051,6 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                         <div className="flex-grow">
                                             <p className="font-semibold text-slate-800 text-lg">{task.title}</p>
                                             
-                                            {/* Description - Made prominent */}
                                             <div className="mt-2 mb-3">
                                                 <MarkdownRenderer content={task.description} className="text-slate-700 text-base" />
                                             </div>
@@ -912,7 +1123,6 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
     const viewingUser = users.find(u => u.id === csmId);
     const myCustomers = useMemo(() => customers.filter(c => c.assignedCsmId === csmId).sort((a,b) => a.name.localeCompare(b.name)), [customers, csmId]);
     
-    // Reset selection if the viewing CSM changes (e.g. via dropdown in header)
     useEffect(() => {
         setSelectedCustomerId(null);
     }, [csmId]);
@@ -947,7 +1157,6 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
                         </button>
                     </div>
                     
-                    {/* Content when open */}
                     <div className={`space-y-4 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'} transition-opacity duration-200`}>
                         <div className="space-y-1">
                              <button
@@ -978,7 +1187,6 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
                         </div>
                     </div>
 
-                    {/* Content when closed (Icons only) */}
                     {!isSidebarOpen && (
                          <div className="flex flex-col gap-4 w-full items-center mt-2 animate-fadeIn">
                              <button

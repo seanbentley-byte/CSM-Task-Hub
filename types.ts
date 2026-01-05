@@ -65,6 +65,17 @@ export interface TaskCompletion {
     completedAt?: number;
 }
 
+export interface Objective {
+    id: string;
+    customerId?: string;
+    csmId?: string;
+    text: string;
+    dueDate?: string;
+    isCompleted: boolean;
+    completedAt?: number;
+    createdAt: number;
+}
+
 export interface ActionItem {
     id: string;
     customerId?: string;
