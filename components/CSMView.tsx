@@ -406,6 +406,7 @@ const FeatureRequestRow: React.FC<{
             </div>
             <div className="flex gap-1 items-center ml-2">
                  {canEdit && !item.isCompleted && (
+                     // fix: Changed 'id' to 'item.id' to fix line 409 error.
                      <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-2 h-7 mr-1">Complete</Button>
                  )}
                  {canEdit && (
@@ -544,8 +545,8 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const [showCompletedFeatures, setShowCompletedFeatures] = useState(false);
     const [showArchivedObjectives, setShowArchivedObjectives] = useState(false);
     const [isObjectivesSectionOpen, setIsObjectivesSectionOpen] = useState(false);
-    const [isActionItemsSectionOpen, setIsActionItemsSectionOpen] = useState(false);
-    const [isManagerTasksOpen, setIsManagerTasksOpen] = useState(false);
+    const [isActionItemsSectionOpen, setIsActionItemsSectionOpen] = useState(true);
+    const [isManagerTasksOpen, setIsManagerTasksOpen] = useState(true);
     
     const [currentNotes, setCurrentNotes] = useState('');
     const [isSummarizing, setIsSummarizing] = useState(false);
