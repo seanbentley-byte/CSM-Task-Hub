@@ -33,8 +33,6 @@ interface AppContextType {
     setFeatureRequests: React.Dispatch<React.SetStateAction<FeatureRequest[]>>;
     meetingNotes: MeetingNote[];
     setMeetingNotes: React.Dispatch<React.SetStateAction<MeetingNote[]>>;
-    apiKey: string | null;
-    setApiKey: React.Dispatch<React.SetStateAction<string | null>>;
     currentUser: AuthenticatedUser | null;
     setCurrentUser: React.Dispatch<React.SetStateAction<AuthenticatedUser | null>>;
     
@@ -91,7 +89,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [meetingNotes, setMeetingNotes] = useStickyState<MeetingNote[]>('csm_meetingNotes', initialMeetingNotes);
     
     // Auth & Config
-    const [apiKey, setApiKey] = useState<string | null>(() => localStorage.getItem('gemini-api-key'));
     const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => {
         const storedUser = sessionStorage.getItem('currentUser');
         return storedUser ? JSON.parse(storedUser) : null;
@@ -124,14 +121,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // Persistence Effects
-    useEffect(() => {
-        if (apiKey) {
-            localStorage.setItem('gemini-api-key', apiKey);
-        } else {
-            localStorage.removeItem('gemini-api-key');
-        }
-    }, [apiKey]);
-
     useEffect(() => {
         if (currentUser) {
             sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
@@ -259,7 +248,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,
         meetingNotes, setMeetingNotes,
-        apiKey, setApiKey,
         currentUser, setCurrentUser,
         sheetsConfig, setSheetsConfig,
         isSheetConnected,

@@ -4,45 +4,8 @@ import { AppProvider, useAppContext } from './components/AppContext';
 import ManagerView from './components/ManagerView';
 import CSMView from './components/CSMView';
 import SettingsView from './components/SettingsView';
-import { CogIcon, Button, Modal, Card, CloudIcon, RefreshIcon, CheckCircleIcon } from './components/ui';
+import { CogIcon, Button, Card, CloudIcon, RefreshIcon, CheckCircleIcon } from './components/ui';
 import { AuthenticatedUser } from './types';
-
-const ApiKeyModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
-    const { setApiKey } = useAppContext();
-    const [key, setKey] = useState('');
-
-    const handleSave = () => {
-        if (key.trim()) {
-            setApiKey(key.trim());
-            onClose();
-        }
-    };
-    
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Enter Your Google AI API Key">
-            <div className="space-y-4">
-                <p className="text-sm text-slate-600">
-                    To use the AI features, please provide your Google AI API key. You can get a key from Google AI Studio. 
-                    Your key is stored locally in your browser and is not shared.
-                </p>
-                <div>
-                    <label htmlFor="api-key-input" className="sr-only">API Key</label>
-                    <input
-                        id="api-key-input"
-                        type="password"
-                        value={key}
-                        onChange={(e) => setKey(e.target.value)}
-                        placeholder="Enter your API key here"
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    />
-                </div>
-                <div className="flex justify-end">
-                    <Button onClick={handleSave}>Save Key</Button>
-                </div>
-            </div>
-        </Modal>
-    )
-};
 
 const Login: React.FC = () => {
     const { setCurrentUser, users } = useAppContext();
@@ -230,7 +193,7 @@ const Header: React.FC<{
 
 
 const AppContent: React.FC = () => {
-    const { currentUser, setCurrentUser, users, apiKey, isSheetConnected } = useAppContext();
+    const { currentUser, setCurrentUser, users } = useAppContext();
 
     // State for manager view
     const [currentView, setCurrentView] = useState<'dashboard' | 'settings'>('dashboard');
@@ -264,15 +227,6 @@ const AppContent: React.FC = () => {
     }, [currentCsmId, users, currentRole, currentUser]);
 
 
-    const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
-    
-    useEffect(() => {
-        if (currentUser && !apiKey) {
-            setIsApiKeyModalOpen(true);
-        }
-    }, [currentUser, apiKey]);
-
-
     const handleLogout = () => {
         setCurrentUser(null);
     };
@@ -303,7 +257,6 @@ const AppContent: React.FC = () => {
                     <SettingsView />
                 )}
             </main>
-            <ApiKeyModal isOpen={isApiKeyModalOpen} onClose={() => setIsApiKeyModalOpen(false)} />
         </>
     );
 };

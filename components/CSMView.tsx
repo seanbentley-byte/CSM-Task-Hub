@@ -63,7 +63,7 @@ const ObjectiveRow: React.FC<{
     };
 
     return (
-        <div className="flex flex-col bg-white rounded-md border border-slate-200 overflow-hidden transition-all duration-200">
+        <div className="flex flex-col bg-white rounded-md border border-slate-200 overflow-hidden transition-all duration-200 group">
             <div className={`flex items-center justify-between p-3 ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50'}`}>
                 <div className="flex items-center flex-grow gap-3 min-w-0">
                     <input 
@@ -297,6 +297,7 @@ const BugReportRow: React.FC<{
             </div>
             <div className="flex gap-1 items-center ml-2">
                 {canEdit && !item.isCompleted && (
+                    // fix: Changed 'id' to 'item.id' to fix line 300 error.
                      <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-2 h-7 mr-1">Complete</Button>
                 )}
                 
@@ -526,8 +527,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
         actionItems, setActionItems,
         bugReports, setBugReports,
         featureRequests, setFeatureRequests,
-        meetingNotes, setMeetingNotes,
-        apiKey
+        meetingNotes, setMeetingNotes
     } = useAppContext();
     
     const isCsmView = entityType === 'csm';
@@ -537,6 +537,8 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const [showCompletedBugs, setShowCompletedBugs] = useState(false);
     const [showCompletedFeatures, setShowCompletedFeatures] = useState(false);
     const [showArchivedObjectives, setShowArchivedObjectives] = useState(false);
+    const [isObjectivesSectionOpen, setIsObjectivesSectionOpen] = useState(false);
+    const [isManagerTasksOpen, setIsManagerTasksOpen] = useState(false);
     
     const [currentNotes, setCurrentNotes] = useState('');
     const [isSummarizing, setIsSummarizing] = useState(false);
@@ -618,13 +620,19 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
         return t.assignmentType === 'customer' && t.assignedCustomerIds.includes(entityId)
     }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, entityId, isCsmView]);
 
+    const activeManagerTasksCount = useMemo(() => managerTasks.filter(task => {
+        const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
+        return !completion?.isCompleted;
+    }).length, [managerTasks, taskCompletions, entityId, isCsmView]);
+
     const handleSummarizeNotes = async () => {
-         if (!currentNotes || !apiKey || !canEdit) return;
+         if (!currentNotes || !canEdit) return;
         setIsSummarizing(true);
         try {
-            const ai = new GoogleGenAI({ apiKey });
+            // fix: Updated AI initialization and model name according to guidelines.
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3-flash-preview',
                 contents: `Summarize the following notes into key bullet points and identify any action items: \n\n${currentNotes}`,
             });
             const newText = `${currentNotes}\n\n**AI Summary:**\n${response.text}`;
@@ -640,7 +648,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
         } catch (error) {
             console.error("Failed to summarize notes:", error);
-            alert("Failed to summarize notes. Please check your API key in settings.");
+            alert("Failed to summarize notes.");
         } finally {
             setIsSummarizing(false);
         }
@@ -819,110 +827,145 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
     return (
         <div className="flex-grow space-y-4 pb-8">
-            {/* NEW OBJECTIVES SECTION */}
-            <Card className="border-l-4 border-l-indigo-600">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-slate-800">Objectives ({activeObjectives.length})</h2>
-                </div>
-                {canEdit && (
-                    <form onSubmit={handleAddObjective} className="flex flex-col sm:flex-row gap-2 mb-6 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
-                        <input 
-                            type="text" 
-                            value={newObjective} 
-                            onChange={e => setNewObjective(e.target.value)} 
-                            placeholder="Set a new objective..." 
-                            className="flex-grow p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" 
-                        />
-                        <input 
-                            type="date" 
-                            value={objectiveDate} 
-                            onChange={e => setObjectiveDate(e.target.value)} 
-                            className="p-2 border rounded-md text-sm text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                        />
-                        <Button type="submit">Set</Button>
-                    </form>
-                )}
-                <div className="space-y-3">
-                    {activeObjectives.map(obj => (
-                        <ObjectiveRow 
-                            key={obj.id} 
-                            item={obj} 
-                            onToggle={handleToggleObjective} 
-                            onDelete={handleDeleteObjective} 
-                            onUpdate={handleUpdateObjective}
-                            canEdit={canEdit} 
-                        />
-                    ))}
-                    {activeObjectives.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No active objectives.</p>}
-                </div>
-                
-                {completedObjectives.length > 0 && (
-                    <div className="mt-6">
-                        <button 
-                            onClick={() => setShowArchivedObjectives(!showArchivedObjectives)}
-                            className="flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-wider"
-                        >
-                            <ChevronDownIcon className={`transform transition-transform ${showArchivedObjectives ? 'rotate-180' : ''}`} />
-                            Archived Objectives ({completedObjectives.length})
-                        </button>
-                        {showArchivedObjectives && (
-                            <div className="mt-3 space-y-2 animate-fadeIn">
-                                {completedObjectives.map(obj => (
-                                    <ObjectiveRow 
-                                        key={obj.id} 
-                                        item={obj} 
-                                        onToggle={handleToggleObjective} 
-                                        onDelete={handleDeleteObjective} 
-                                        onUpdate={handleUpdateObjective}
-                                        canEdit={canEdit} 
-                                    />
-                                ))}
-                            </div>
-                        )}
+            {/* COLLAPSIBLE OBJECTIVES SECTION - Top */}
+            <details 
+                className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" 
+                onToggle={(e) => setIsObjectivesSectionOpen((e.target as HTMLDetailsElement).open)}
+                open={isObjectivesSectionOpen}
+            >
+                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
+                    <div className="flex items-center gap-2">
+                         Objectives ({activeObjectives.length})
                     </div>
-                )}
-            </Card>
-
-            <Card>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Action Items ({incompleteActionItems.length})</h2>
-                {canEdit && (
-                    <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4">
-                        <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2 border rounded-md" />
-                        <Button type="submit">Add</Button>
-                    </form>
-                )}
-                <div className="space-y-2">
-                    {incompleteActionItems.map(ai => (
-                         <ActionItemRow 
-                            key={ai.id} 
-                            item={ai} 
-                            onToggle={handleToggleActionItem} 
-                            onDelete={handleDeleteActionItem} 
-                            onUpdate={handleUpdateActionItem}
-                            canEdit={canEdit} 
-                        />
-                    ))}
-                    {incompleteActionItems.length === 0 && <p className="text-slate-500 text-sm">No active action items.</p>}
-                </div>
-                 {completedActionItems.length > 0 && <hr className="my-4" />}
-                <div className="space-y-2">
-                     {visibleCompleted.map(ai => (
-                         <ActionItemRow 
-                            key={ai.id} 
-                            item={ai} 
-                            onToggle={handleToggleActionItem} 
-                            onDelete={handleDeleteActionItem} 
-                            onUpdate={handleUpdateActionItem}
-                            canEdit={canEdit} 
-                        />
-                    ))}
-                    {completedActionItems.length > 3 && (
-                        <Button variant="secondary" onClick={() => setShowOlderCompleted(!showOlderCompleted)} className="w-full mt-2">
-                            {showOlderCompleted ? 'Hide older items' : `Show ${completedActionItems.length - 3} older items...`}
-                        </Button>
+                    <ChevronDownIcon className={`transition-transform transform ${isObjectivesSectionOpen ? 'rotate-180' : ''}`} />
+                </summary>
+                <div className="p-6 pt-0">
+                    {canEdit && (
+                        <form onSubmit={handleAddObjective} className="flex flex-col sm:flex-row gap-2 mb-6 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                            <input 
+                                type="text" 
+                                value={newObjective} 
+                                onChange={e => setNewObjective(e.target.value)} 
+                                placeholder="Set a new objective..." 
+                                className="flex-grow p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" 
+                            />
+                            <input 
+                                type="date" 
+                                value={objectiveDate} 
+                                onChange={e => setObjectiveDate(e.target.value)} 
+                                className="p-2 border border-slate-200 rounded-md text-sm text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                            />
+                            <Button type="submit">Set</Button>
+                        </form>
+                    )}
+                    <div className="space-y-3">
+                        {activeObjectives.map(obj => (
+                            <ObjectiveRow 
+                                key={obj.id} 
+                                item={obj} 
+                                onToggle={handleToggleObjective} 
+                                onDelete={handleDeleteObjective} 
+                                onUpdate={handleUpdateObjective}
+                                canEdit={canEdit} 
+                            />
+                        ))}
+                        {activeObjectives.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No active objectives.</p>}
+                    </div>
+                    
+                    {completedObjectives.length > 0 && (
+                        <div className="mt-6 border-t border-slate-100 pt-4">
+                            <button 
+                                onClick={() => setShowArchivedObjectives(!showArchivedObjectives)}
+                                className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
+                            >
+                                <ChevronDownIcon className={`w-4 h-4 transform transition-transform ${showArchivedObjectives ? 'rotate-180' : ''}`} />
+                                Archived Objectives ({completedObjectives.length})
+                            </button>
+                            {showArchivedObjectives && (
+                                <div className="mt-3 space-y-2 animate-fadeIn">
+                                    {completedObjectives.map(obj => (
+                                        <ObjectiveRow 
+                                            key={obj.id} 
+                                            item={obj} 
+                                            onToggle={handleToggleObjective} 
+                                            onDelete={handleDeleteObjective} 
+                                            onUpdate={handleUpdateObjective}
+                                            canEdit={canEdit} 
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
-            </Card>
+            </details>
+
+            {/* COLLAPSIBLE MANAGER TASKS SECTION - Second */}
+            <details 
+                className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" 
+                onToggle={(e) => setIsManagerTasksOpen((e.target as HTMLDetailsElement).open)}
+                open={isManagerTasksOpen}
+            >
+                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
+                    <div className="flex items-center gap-2">
+                         Manager Assigned Tasks ({activeManagerTasksCount})
+                    </div>
+                    <ChevronDownIcon className={`transition-transform transform ${isManagerTasksOpen ? 'rotate-180' : ''}`} />
+                </summary>
+                <div className="p-6 pt-0">
+                    <div className="space-y-4">
+                        {managerTasks.map(task => {
+                            const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entity.id));
+                            const isEditing = editingTaskId === task.id;
+                            const isComplete = completion?.isCompleted || false;
+
+                            return (
+                                <div key={task.id} className={`p-3 rounded-md border ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-start flex-grow">
+                                            {isComplete ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
+                                            <div className="flex-grow">
+                                                <p className="font-semibold text-slate-800 text-lg">{task.title}</p>
+                                                
+                                                <div className="mt-2 mb-3">
+                                                    <MarkdownRenderer content={task.description} className="text-slate-700 text-base" />
+                                                </div>
+
+                                                <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {formatDate(task.dueDate)}</p>
+                                                {isComplete && completion && (
+                                                    <div className="text-sm mt-1 text-slate-600 italic space-y-1">
+                                                        {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: "{completion.notes}"</p>}
+                                                        {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
+                                                            <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
+                                                        }
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {!isEditing && canEdit && (
+                                            <Button variant="secondary" onClick={() => setEditingTaskId(task.id)}>
+                                                {completion ? 'Edit' : 'Complete'}
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {isEditing && canEdit && (
+                                        <TaskCompletionForm 
+                                            task={task} 
+                                            customerId={isCsmView ? undefined : entityId}
+                                            csmId={isCsmView ? entityId : undefined}
+                                            existingCompletion={completion} 
+                                            onSave={(data) => handleSaveCompletion(task.id, data)}
+                                            onCancel={() => setEditingTaskId(null)}
+                                            canEdit={canEdit}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
+                        {managerTasks.length === 0 && <p className="text-slate-500 text-center py-4">No tasks assigned by manager.</p>}
+                    </div>
+                </div>
+            </details>
 
             <details className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" onToggle={(e) => setIsBugsSectionOpen((e.target as HTMLDetailsElement).open)} open={isBugsSectionOpen}>
                 <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
@@ -1036,57 +1079,43 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
             </details>
 
             <Card>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Manager Assigned Tasks</h2>
-                <div className="space-y-4">
-                    {managerTasks.map(task => {
-                        const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entity.id));
-                        const isEditing = editingTaskId === task.id;
-                        const isComplete = completion?.isCompleted || false;
-
-                        return (
-                             <div key={task.id} className={`p-3 rounded-md border ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-start flex-grow">
-                                        {isComplete ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
-                                        <div className="flex-grow">
-                                            <p className="font-semibold text-slate-800 text-lg">{task.title}</p>
-                                            
-                                            <div className="mt-2 mb-3">
-                                                <MarkdownRenderer content={task.description} className="text-slate-700 text-base" />
-                                            </div>
-
-                                            <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {formatDate(task.dueDate)}</p>
-                                            {isComplete && completion && (
-                                                <div className="text-sm mt-1 text-slate-600 italic space-y-1">
-                                                    {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: "{completion.notes}"</p>}
-                                                    {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
-                                                        <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
-                                                    }
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {!isEditing && canEdit && (
-                                        <Button variant="secondary" onClick={() => setEditingTaskId(task.id)}>
-                                            {completion ? 'Edit' : 'Complete'}
-                                        </Button>
-                                    )}
-                                </div>
-                                {isEditing && canEdit && (
-                                    <TaskCompletionForm 
-                                        task={task} 
-                                        customerId={isCsmView ? undefined : entityId}
-                                        csmId={isCsmView ? entityId : undefined}
-                                        existingCompletion={completion} 
-                                        onSave={(data) => handleSaveCompletion(task.id, data)}
-                                        onCancel={() => setEditingTaskId(null)}
-                                        canEdit={canEdit}
-                                    />
-                                )}
-                            </div>
-                        );
-                    })}
-                    {managerTasks.length === 0 && <p className="text-slate-500 text-center py-4">No tasks assigned by manager.</p>}
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Action Items ({incompleteActionItems.length})</h2>
+                {canEdit && (
+                    <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4">
+                        <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2 border rounded-md" />
+                        <Button type="submit">Add</Button>
+                    </form>
+                )}
+                <div className="space-y-2">
+                    {incompleteActionItems.map(ai => (
+                         <ActionItemRow 
+                            key={ai.id} 
+                            item={ai} 
+                            onToggle={handleToggleActionItem} 
+                            onDelete={handleDeleteActionItem} 
+                            onUpdate={handleUpdateActionItem}
+                            canEdit={canEdit} 
+                        />
+                    ))}
+                    {incompleteActionItems.length === 0 && <p className="text-slate-500 text-sm">No active action items.</p>}
+                </div>
+                 {completedActionItems.length > 0 && <hr className="my-4" />}
+                <div className="space-y-2">
+                     {visibleCompleted.map(ai => (
+                         <ActionItemRow 
+                            key={ai.id} 
+                            item={ai} 
+                            onToggle={handleToggleActionItem} 
+                            onDelete={handleDeleteActionItem} 
+                            onUpdate={handleUpdateActionItem}
+                            canEdit={canEdit} 
+                        />
+                    ))}
+                    {completedActionItems.length > 3 && (
+                        <Button variant="secondary" onClick={() => setShowOlderCompleted(!showOlderCompleted)} className="w-full mt-2">
+                            {showOlderCompleted ? 'Hide older items' : `Show ${completedActionItems.length - 3} older items...`}
+                        </Button>
+                    )}
                 </div>
             </Card>
 
@@ -1105,7 +1134,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                 ></textarea>
                  {canEdit && (
                     <div className="flex justify-end gap-2 mt-2">
-                        <Button onClick={handleSummarizeNotes} disabled={isSummarizing || !apiKey}>
+                        <Button onClick={handleSummarizeNotes} disabled={isSummarizing}>
                             <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
                         </Button>
                     </div>

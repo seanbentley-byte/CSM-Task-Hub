@@ -72,8 +72,7 @@ const SettingsView: React.FC = () => {
         setBugReports,
         setFeatureRequests,
         setMeetingNotes,
-        apiKey, setApiKey,
-        currentUser, setCurrentUser,
+        currentUser,
         sheetsConfig, setSheetsConfig,
         isSheetConnected, syncData, isSyncing, lastSyncTime
     } = useAppContext();
@@ -93,9 +92,6 @@ const SettingsView: React.FC = () => {
     const [assignedCsmId, setAssignedCsmId] = useState<string>('');
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
-    // API Key Management
-    const [tempApiKey, setTempApiKey] = useState(apiKey || '');
-    
     // My Account
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -114,10 +110,6 @@ const SettingsView: React.FC = () => {
         }
     }, [assignableUsers, assignedCsmId]);
     
-    useEffect(() => {
-        setTempApiKey(apiKey || '');
-    }, [apiKey]);
-
     useEffect(() => {
         if (sheetsConfig) {
             setWebAppUrl(sheetsConfig.webAppUrl);
@@ -211,11 +203,6 @@ const SettingsView: React.FC = () => {
             setFeatureRequests(prev => prev.filter(fr => fr.customerId !== customerId));
             setMeetingNotes(prev => prev.filter(n => n.customerId !== customerId));
         }
-    };
-    
-    const handleApiKeySave = () => {
-        setApiKey(tempApiKey);
-        alert('API Key updated!');
     };
     
     const handlePasswordChange = (e: React.FormEvent) => {
@@ -351,16 +338,6 @@ const SettingsView: React.FC = () => {
                              <Button type="submit">Change Password</Button>
                         </div>
                     </form>
-                </Card>
-                 <Card>
-                    <h2 className="text-2xl font-bold text-slate-800 mb-4">Gemini API Settings</h2>
-                    <div>
-                        <label htmlFor="api-key-settings" className="block text-sm font-medium text-slate-700 mb-1">Google AI API Key</label>
-                        <div className="flex gap-2">
-                            <input id="api-key-settings" type="password" value={tempApiKey} onChange={e => setTempApiKey(e.target.value)} placeholder="Enter your API key" className="flex-grow px-3 py-2 bg-white border border-slate-300 rounded-md" />
-                            <Button onClick={handleApiKeySave}>Save</Button>
-                        </div>
-                    </div>
                 </Card>
             </div>
 
