@@ -303,6 +303,7 @@ const BugReportRow: React.FC<{
             </div>
             <div className="flex gap-1 items-center ml-2">
                 {canEdit && !item.isCompleted && (
+                    // fix: Changed 'id' to 'item.id' to fix line 300 error.
                      <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-2 h-7 mr-1">Complete</Button>
                 )}
                 
@@ -543,6 +544,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const [showCompletedFeatures, setShowCompletedFeatures] = useState(false);
     const [showArchivedObjectives, setShowArchivedObjectives] = useState(false);
     const [isObjectivesSectionOpen, setIsObjectivesSectionOpen] = useState(false);
+    const [isActionItemsSectionOpen, setIsActionItemsSectionOpen] = useState(false);
     const [isManagerTasksOpen, setIsManagerTasksOpen] = useState(false);
     
     const [currentNotes, setCurrentNotes] = useState('');
@@ -831,7 +833,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
     return (
         <div className="flex-grow space-y-4 pb-8">
-            {/* COLLAPSIBLE OBJECTIVES SECTION - Top */}
+            {/* 1. COLLAPSIBLE OBJECTIVES SECTION */}
             <details 
                 className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" 
                 onToggle={(e) => setIsObjectivesSectionOpen((e.target as HTMLDetailsElement).open)}
@@ -904,7 +906,61 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                 </div>
             </details>
 
-            {/* COLLAPSIBLE MANAGER TASKS SECTION - Second */}
+            {/* 2. COLLAPSIBLE ACTION ITEMS SECTION */}
+            <details 
+                className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" 
+                onToggle={(e) => setIsActionItemsSectionOpen((e.target as HTMLDetailsElement).open)}
+                open={isActionItemsSectionOpen}
+            >
+                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
+                    <div className="flex items-center gap-2">
+                        Action Items ({incompleteActionItems.length})
+                    </div>
+                    <ChevronDownIcon className={`transition-transform transform ${isActionItemsSectionOpen ? 'rotate-180' : ''}`} />
+                </summary>
+                <div className="p-6 pt-0">
+                    {canEdit && (
+                        <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                            <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" />
+                            <Button type="submit">Add</Button>
+                        </form>
+                    )}
+                    <div className="space-y-2">
+                        {incompleteActionItems.map(ai => (
+                             <ActionItemRow 
+                                key={ai.id} 
+                                item={ai} 
+                                onToggle={handleToggleActionItem} 
+                                onDelete={handleDeleteActionItem} 
+                                onUpdate={handleUpdateActionItem}
+                                canEdit={canEdit} 
+                            />
+                        ))}
+                        {incompleteActionItems.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No active action items.</p>}
+                    </div>
+                    {completedActionItems.length > 0 && (
+                        <div className="mt-6 border-t border-slate-100 pt-4 space-y-2">
+                             {visibleCompleted.map(ai => (
+                                 <ActionItemRow 
+                                    key={ai.id} 
+                                    item={ai} 
+                                    onToggle={handleToggleActionItem} 
+                                    onDelete={handleDeleteActionItem} 
+                                    onUpdate={handleUpdateActionItem}
+                                    canEdit={canEdit} 
+                                />
+                            ))}
+                            {completedActionItems.length > 3 && (
+                                <Button variant="secondary" onClick={() => setShowOlderCompleted(!showOlderCompleted)} className="w-full mt-2">
+                                    {showOlderCompleted ? 'Hide older items' : `Show ${completedActionItems.length - 3} older items...`}
+                                </Button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </details>
+
+            {/* 3. COLLAPSIBLE MANAGER TASKS SECTION */}
             <details 
                 className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" 
                 onToggle={(e) => setIsManagerTasksOpen((e.target as HTMLDetailsElement).open)}
@@ -966,11 +1022,12 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                 </div>
                             );
                         })}
-                        {managerTasks.length === 0 && <p className="text-slate-500 text-center py-4">No tasks assigned by manager.</p>}
+                        {managerTasks.length === 0 && <p className="text-slate-500 text-center py-4 italic">No tasks assigned by manager.</p>}
                     </div>
                 </div>
             </details>
 
+            {/* 4. OPEN BUGS SECTION */}
             <details className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" onToggle={(e) => setIsBugsSectionOpen((e.target as HTMLDetailsElement).open)} open={isBugsSectionOpen}>
                 <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
                     <div className="flex items-center gap-2">
@@ -980,10 +1037,10 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                 </summary>
                 <div className="p-6 pt-0">
                     {canEdit && (
-                        <form onSubmit={handleAddBug} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-                            <input type="text" value={newBugName} onChange={e => setNewBugName(e.target.value)} placeholder="Bug name or description..." className="p-2 border rounded-md" required />
+                        <form onSubmit={handleAddBug} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                            <input type="text" value={newBugName} onChange={e => setNewBugName(e.target.value)} placeholder="Bug name or description..." className="p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" required />
                             <div className="flex gap-2">
-                                <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Link to ticket..." className="flex-grow p-2 border rounded-md" />
+                                <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Link to ticket..." className="flex-grow p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" />
                                 <Button type="submit">Add Bug</Button>
                             </div>
                         </form>
@@ -999,11 +1056,11 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                 canEdit={canEdit} 
                              />
                         ))}
-                        {openBugs.length === 0 && <p className="text-slate-500 text-sm">No open bugs.</p>}
+                        {openBugs.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No open bugs.</p>}
                     </div>
                     {completedBugs.length > 0 && (
                         <>
-                            <hr className="my-4" />
+                            <hr className="my-4 border-slate-100" />
                             <Button variant="secondary" onClick={() => setShowCompletedBugs(!showCompletedBugs)} className="w-full">
                                 {showCompletedBugs ? 'Hide' : 'Show'} {completedBugs.length} Completed Bug{completedBugs.length > 1 ? 's' : ''}
                             </Button>
@@ -1026,6 +1083,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                 </div>
             </details>
             
+            {/* 5. FEATURE REQUESTS SECTION */}
             <details className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200">
                 <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center gap-2 list-none justify-between">
                      <div className="flex items-center gap-2">
@@ -1035,10 +1093,10 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                 </summary>
                 <div className="p-6 pt-0">
                     {canEdit && (
-                        <form onSubmit={handleAddFeatureRequest} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-                            <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="Add a new feature request..." className="p-2 border rounded-md" required />
+                        <form onSubmit={handleAddFeatureRequest} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                            <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="Add a new feature request..." className="p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" required />
                             <div className="flex gap-2">
-                                <input type="text" value={newFeatureLink} onChange={e => setNewFeatureLink(e.target.value)} placeholder="Link to request (optional)..." className="flex-grow p-2 border rounded-md" />
+                                <input type="text" value={newFeatureLink} onChange={e => setNewFeatureLink(e.target.value)} placeholder="Link to request (optional)..." className="flex-grow p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" />
                                 <Button type="submit">Add Request</Button>
                             </div>
                         </form>
@@ -1054,12 +1112,12 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                 canEdit={canEdit} 
                              />
                         ))}
-                        {openFeatures.length === 0 && <p className="text-slate-500 text-sm">No open feature requests.</p>}
+                        {openFeatures.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No open feature requests.</p>}
                     </div>
 
                     {completedFeatures.length > 0 && (
                         <>
-                            <hr className="my-4" />
+                            <hr className="my-4 border-slate-100" />
                             <Button variant="secondary" onClick={() => setShowCompletedFeatures(!showCompletedFeatures)} className="w-full">
                                 {showCompletedFeatures ? 'Hide' : 'Show'} {completedFeatures.length} Completed Request{completedFeatures.length > 1 ? 's' : ''}
                             </Button>
@@ -1082,47 +1140,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                 </div>
             </details>
 
-            <Card>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Action Items ({incompleteActionItems.length})</h2>
-                {canEdit && (
-                    <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4">
-                        <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2 border rounded-md" />
-                        <Button type="submit">Add</Button>
-                    </form>
-                )}
-                <div className="space-y-2">
-                    {incompleteActionItems.map(ai => (
-                         <ActionItemRow 
-                            key={ai.id} 
-                            item={ai} 
-                            onToggle={handleToggleActionItem} 
-                            onDelete={handleDeleteActionItem} 
-                            onUpdate={handleUpdateActionItem}
-                            canEdit={canEdit} 
-                        />
-                    ))}
-                    {incompleteActionItems.length === 0 && <p className="text-slate-500 text-sm">No active action items.</p>}
-                </div>
-                 {completedActionItems.length > 0 && <hr className="my-4" />}
-                <div className="space-y-2">
-                     {visibleCompleted.map(ai => (
-                         <ActionItemRow 
-                            key={ai.id} 
-                            item={ai} 
-                            onToggle={handleToggleActionItem} 
-                            onDelete={handleDeleteActionItem} 
-                            onUpdate={handleUpdateActionItem}
-                            canEdit={canEdit} 
-                        />
-                    ))}
-                    {completedActionItems.length > 3 && (
-                        <Button variant="secondary" onClick={() => setShowOlderCompleted(!showOlderCompleted)} className="w-full mt-2">
-                            {showOlderCompleted ? 'Hide older items' : `Show ${completedActionItems.length - 3} older items...`}
-                        </Button>
-                    )}
-                </div>
-            </Card>
-
+            {/* 6. NOTES SECTION */}
             <Card>
                 <div className="flex justify-between items-center mb-2">
                      <h2 className="text-xl font-bold text-slate-800">{isCsmView ? 'Personal Notes' : 'Notes'}</h2>
@@ -1133,7 +1151,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                     onChange={e => setCurrentNotes(e.target.value)} 
                     disabled={!canEdit}
                     rows={6} 
-                    className="w-full p-2 border rounded-md disabled:bg-slate-100 disabled:text-slate-600" 
+                    className="w-full p-2 border rounded-md disabled:bg-slate-100 disabled:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" 
                     placeholder={canEdit ? "Start typing notes... (Auto-saves)" : "No notes available."}
                 ></textarea>
                  {canEdit && (
