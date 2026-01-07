@@ -490,9 +490,15 @@ const DashboardStats: React.FC = () => {
 
         const getTaskCompletionPercent = (task: Task) => {
             const assignedCount = task.assignmentType === 'csm' ? task.assignedCsmIds?.length || 0 : task.assignedCustomerIds.length;
-            if (assignedCount === 0) return 100;
+            if (assignedCount === 0) return 0;
 
-            const completedCount = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted).length;
+            const completedCount = taskCompletions.filter(tc => 
+                tc.taskId === task.id && 
+                tc.isCompleted &&
+                (task.assignmentType === 'csm' 
+                    ? task.assignedCsmIds?.includes(tc.csmId || '') 
+                    : task.assignedCustomerIds.includes(tc.customerId || ''))
+            ).length;
             return (completedCount / assignedCount) * 100;
         };
 
@@ -693,7 +699,15 @@ const ManagerView: React.FC = () => {
     const getTaskCompletionPercent = (task: Task) => {
         const assignedCount = task.assignmentType === 'csm' ? task.assignedCsmIds?.length || 0 : task.assignedCustomerIds.length;
         if (assignedCount === 0) return 0;
-        const completedCount = taskCompletions.filter(tc => tc.taskId === task.id && tc.isCompleted).length;
+        
+        const completedCount = taskCompletions.filter(tc => 
+            tc.taskId === task.id && 
+            tc.isCompleted &&
+            (task.assignmentType === 'csm' 
+                ? task.assignedCsmIds?.includes(tc.csmId || '') 
+                : task.assignedCustomerIds.includes(tc.customerId || ''))
+        ).length;
+        
         return (completedCount / assignedCount) * 100;
     };
 
@@ -830,7 +844,7 @@ const ManagerView: React.FC = () => {
                             task={task}
                             onEdit={handleEditTask}
                             onArchive={handleArchiveTask}
-                            onExport={handleExportTask}
+                            onExport={handleEditTask}
                             onDelete={handleDeleteTask}
                             completionPercent={getTaskCompletionPercent(task)}
                             isExpanded={expandedTaskId === task.id}
