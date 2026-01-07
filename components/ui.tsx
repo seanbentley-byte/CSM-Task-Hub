@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 // Icons (simple SVG components)
@@ -37,7 +38,7 @@ export const Button: React.FC<{
     className?: string;
     title?: string;
 }> = ({ children, onClick, variant = 'primary', type = 'button', disabled = false, className, title }) => {
-    const baseClasses = 'inline-flex items-center justify-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+    const baseClasses = 'inline-flex items-center justify-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200';
     const variantClasses = {
         primary: 'text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500',
         secondary: 'text-slate-700 bg-slate-100 hover:bg-slate-200 focus:ring-indigo-500 border-slate-300',
@@ -60,13 +61,13 @@ export const Modal: React.FC<{
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" aria-modal="true" role="dialog">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto" aria-modal="true" role="dialog">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg flex flex-col my-8">
                 <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
                     <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none">&times;</button>
                 </div>
-                <div className="p-6 overflow-y-auto">
+                <div className="p-6 overflow-y-auto max-h-[calc(100vh-10rem)]">
                     {children}
                 </div>
             </div>
@@ -75,19 +76,17 @@ export const Modal: React.FC<{
 };
 
 export const Tag: React.FC<{ children: React.ReactNode; color: string }> = ({ children, color }) => (
-    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${color}`}>
+    <span className={`px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${color}`}>
         {children}
     </span>
 );
 
 export const MarkdownRenderer: React.FC<{ content: string, className?: string }> = ({ content, className }) => {
-    // A simple renderer. For full markdown support, a library like react-markdown would be used.
-    // This simple version handles bolding and newlines.
-    const parts = content.split(/(\*\*.*?\*\*)/g);
+    // Standardize text containment and word-breaking
     return (
-        <div className={className}>
+        <div className={`${className} break-words overflow-hidden`}>
             {content.split('\n').map((line, index) => (
-                <p key={index} className="m-0" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/>
+                <p key={index} className="m-0 break-words" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}/>
             ))}
         </div>
     );

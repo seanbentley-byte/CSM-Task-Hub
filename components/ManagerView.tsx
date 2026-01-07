@@ -398,13 +398,13 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
     }
 
     return (
-        <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
+        <div className="mt-4 p-4 bg-slate-50 rounded-lg overflow-hidden">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                 <h4 className="font-semibold text-slate-700">Completion Details</h4>
-                <div className="flex gap-4 items-center">
+                <div className="flex flex-wrap gap-4 items-center">
                     {hasMultiSelect && (
-                         <div>
-                            <label htmlFor={`filter-response-${task.id}`} className="text-sm font-medium text-slate-600 mr-2">Filter by response:</label>
+                         <div className="flex items-center">
+                            <label htmlFor={`filter-response-${task.id}`} className="text-sm font-medium text-slate-600 mr-2 whitespace-nowrap">Filter by response:</label>
                              <select
                                  id={`filter-response-${task.id}`}
                                  value={selectedOptionFilter}
@@ -418,8 +418,8 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
                              </select>
                          </div>
                      )}
-                     <div>
-                        <label htmlFor={`filter-status-${task.id}`} className="text-sm font-medium text-slate-600 mr-2">Filter by status:</label>
+                     <div className="flex items-center">
+                        <label htmlFor={`filter-status-${task.id}`} className="text-sm font-medium text-slate-600 mr-2 whitespace-nowrap">Filter by status:</label>
                         <select
                             id={`filter-status-${task.id}`}
                             value={completionStatusFilter}
@@ -440,17 +440,17 @@ const TaskDetails: React.FC<{ task: Task }> = ({ task }) => {
                     const csm = users.find(c => c.id === customer.assignedCsmId);
                     
                     return (
-                        <li key={customer.id} className="flex items-start justify-between p-3 bg-white rounded-md border border-slate-200">
-                           <div className="flex items-start">
+                        <li key={customer.id} className="flex items-start justify-between p-3 bg-white rounded-md border border-slate-200 overflow-hidden">
+                           <div className="flex items-start min-w-0 flex-grow">
                                 {completion?.isCompleted ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
-                               <div>
-                                    <p className="font-semibold text-slate-800">{customer.name}</p>
-                                    <p className="text-sm text-slate-500">Assigned To: {csm?.name || 'Unassigned'}</p>
+                               <div className="min-w-0">
+                                    <p className="font-semibold text-slate-800 truncate">{customer.name}</p>
+                                    <p className="text-sm text-slate-500 truncate">Assigned To: {csm?.name || 'Unassigned'}</p>
                                     {completion?.isCompleted && (
                                         <div className="text-sm mt-1 text-slate-600 italic space-y-1">
-                                            {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: <MarkdownRenderer content={completion.notes} className="inline-block" /></p>}
+                                            {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p className="break-words">Notes: <MarkdownRenderer content={completion.notes} className="inline-block" /></p>}
                                             {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
-                                                <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
+                                                <p className="truncate">Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
                                             }
                                         </div>
                                     )}
@@ -592,15 +592,15 @@ const TaskRow: React.FC<{
     };
 
     return (
-        <div className="border border-slate-200 rounded-lg p-4">
-            <div className="flex justify-between items-start">
-                <div className="flex-grow">
-                    <div className="flex items-center gap-3">
+        <div className="border border-slate-200 rounded-lg p-4 bg-white shadow-sm overflow-hidden transition-all duration-300">
+            <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
+                <div className="flex-grow min-w-0 w-full lg:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
                          <Tag color={getCategoryColor(task.category)}>{task.category}</Tag>
                          {isEditingTitle ? (
                              <input 
                                 autoFocus
-                                className="text-lg font-semibold text-slate-800 border-b-2 border-indigo-500 focus:outline-none bg-transparent flex-grow max-w-md"
+                                className="text-lg font-semibold text-slate-800 border-b-2 border-indigo-500 focus:outline-none bg-transparent flex-grow max-w-md min-w-0"
                                 value={titleValue}
                                 onChange={e => setTitleValue(e.target.value)}
                                 onBlur={handleSaveTitle}
@@ -614,7 +614,7 @@ const TaskRow: React.FC<{
                              />
                          ) : (
                              <h3 
-                                className="text-lg font-semibold text-slate-800 cursor-pointer hover:text-indigo-600 transition-colors"
+                                className="text-lg font-semibold text-slate-800 cursor-pointer hover:text-indigo-600 transition-colors truncate max-w-full"
                                 onClick={() => setIsEditingTitle(true)}
                                 title="Click to edit title"
                              >
@@ -622,26 +622,29 @@ const TaskRow: React.FC<{
                              </h3>
                          )}
                     </div>
-                    <MarkdownRenderer content={task.description} className="text-sm text-slate-500 mt-1 prose prose-sm max-w-none" />
-                    <div className="flex items-center gap-4 text-sm mt-2 text-slate-600">
-                        <span className={`font-semibold ${isOverdue(task.dueDate) && completionPercent < 100 ? 'text-red-500' : ''}`}>Due: {formatDate(task.dueDate)}</span>
-                        <span className="flex items-center"><UsersIcon /> <span className="ml-1.5">{task.assignmentType === 'csm' ? `${task.assignedCsmIds?.length || 0} Users` : `${task.assignedCustomerIds.length} Customers`}</span></span>
+                    <MarkdownRenderer content={task.description} className="text-sm text-slate-500 prose prose-sm max-w-none" />
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mt-3 text-slate-600">
+                        <span className={`font-semibold whitespace-nowrap ${isOverdue(task.dueDate) && completionPercent < 100 ? 'text-red-500' : ''}`}>Due: {formatDate(task.dueDate)}</span>
+                        <span className="flex items-center whitespace-nowrap"><UsersIcon /> <span className="ml-1.5">{task.assignmentType === 'csm' ? `${task.assignedCsmIds?.length || 0} Users` : `${task.assignedCustomerIds.length} Customers`}</span></span>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                    <div className="w-32 text-center">
-                        <div className="bg-slate-200 rounded-full h-2.5">
-                            <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${completionPercent}%` }}></div>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-4 flex-shrink-0 w-full lg:w-auto mt-4 lg:mt-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                    <div className="w-full sm:w-32 flex-shrink-0">
+                        <div className="bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                            <div className="bg-green-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${completionPercent}%` }}></div>
                         </div>
-                        <p className="text-sm text-slate-600 mt-1">{completionPercent.toFixed(0)}% Complete</p>
+                        <p className="text-xs text-slate-500 mt-1 font-medium text-center">{completionPercent.toFixed(0)}% Complete</p>
                     </div>
-                    <Button variant="secondary" onClick={() => onEdit(task)} className="px-2 py-1" title="Edit Task Details"><PencilIcon/></Button>
-                    <Button variant="secondary" onClick={() => onArchive(task.id)} className="px-2 py-1" title={task.isArchived ? "Unarchive" : "Archive"}><ArchiveIcon/></Button>
-                    <Button variant="secondary" onClick={() => onExport(task)} className="px-2 py-1" title="Export to CSV"><DownloadIcon/></Button>
-                    <Button variant="danger" onClick={() => onDelete(task.id)} className="px-2 py-1" title="Delete Task"><TrashIcon/></Button>
-                    <button onClick={onToggleExpand} className={`p-1 rounded-full hover:bg-slate-100 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                        <ChevronDownIcon />
-                    </button>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                        <Button variant="secondary" onClick={() => onEdit(task)} className="p-2" title="Edit Task Details"><PencilIcon/></Button>
+                        <Button variant="secondary" onClick={() => onArchive(task.id)} className="p-2" title={task.isArchived ? "Unarchive" : "Archive"}><ArchiveIcon/></Button>
+                        <Button variant="secondary" onClick={() => onExport(task)} className="p-2" title="Export to CSV"><DownloadIcon/></Button>
+                        <Button variant="danger" onClick={() => onDelete(task.id)} className="p-2" title="Delete Task"><TrashIcon/></Button>
+                        <button onClick={onToggleExpand} className={`p-2 rounded-full hover:bg-slate-100 transition-all duration-300 ${isExpanded ? 'rotate-180 bg-slate-50' : ''}`}>
+                            <ChevronDownIcon />
+                        </button>
+                    </div>
                 </div>
             </div>
             {isExpanded && <TaskDetails task={task} />}
@@ -759,13 +762,13 @@ const ManagerView: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h1 className="text-3xl font-bold text-slate-800">Manager Dashboard</h1>
-                <div className="flex gap-2">
-                    <Button onClick={() => setIsAIModalOpen(true)} variant="secondary">
+                <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => setIsAIModalOpen(true)} variant="secondary" className="flex-1 sm:flex-none">
                         <SparklesIcon /> Generate with AI
                     </Button>
-                    <Button onClick={handleOpenCreateModal}>
+                    <Button onClick={handleOpenCreateModal} className="flex-1 sm:flex-none">
                         <PlusIcon /> New Task
                     </Button>
                 </div>
@@ -773,24 +776,26 @@ const ManagerView: React.FC = () => {
             
             <DashboardStats />
 
-             <Card>
-                <div className="flex flex-col md:flex-row gap-4 mb-4">
-                    <div className="relative flex-grow">
+             <Card className="overflow-hidden">
+                <div className="flex flex-col lg:flex-row gap-4 mb-6">
+                    <div className="relative flex-grow min-w-0">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon/></span>
                         <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search tasks by title..." className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                     </div>
-                    <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as TaskCategory | 'all')} className="border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="all">All Categories</option>
-                        {Object.values(TaskCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                     <select value={completionFilter} onChange={e => setCompletionFilter(e.target.value as 'all' | 'completed' | 'incomplete')} className="border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="all">All Statuses</option>
-                        <option value="incomplete">Incomplete</option>
-                        <option value="completed">Completed</option>
-                    </select>
-                     <div className="flex items-center">
-                        <input id="show-archived" type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
-                        <label htmlFor="show-archived" className="ml-2 block text-sm font-medium text-slate-700">Show Archived</label>
+                    <div className="flex flex-wrap gap-4">
+                        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value as TaskCategory | 'all')} className="flex-grow sm:flex-none border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 py-2 pl-2 pr-8">
+                            <option value="all">All Categories</option>
+                            {Object.values(TaskCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                        <select value={completionFilter} onChange={e => setCompletionFilter(e.target.value as 'all' | 'completed' | 'incomplete')} className="flex-grow sm:flex-none border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 py-2 pl-2 pr-8">
+                            <option value="all">All Statuses</option>
+                            <option value="incomplete">Incomplete</option>
+                            <option value="completed">Completed</option>
+                        </select>
+                        <div className="flex items-center whitespace-nowrap px-2">
+                            <input id="show-archived" type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                            <label htmlFor="show-archived" className="ml-2 block text-sm font-medium text-slate-700 cursor-pointer">Show Archived</label>
+                        </div>
                     </div>
                 </div>
 
@@ -809,7 +814,7 @@ const ManagerView: React.FC = () => {
                             onToggleExpand={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
                         />
                     ))}
-                     {filteredTasks.length === 0 && <p className="text-center text-slate-500 py-4">No tasks match the current filters.</p>}
+                     {filteredTasks.length === 0 && <p className="text-center text-slate-500 py-12 bg-slate-50 rounded-lg italic">No tasks match the current filters.</p>}
                 </div>
             </Card>
 

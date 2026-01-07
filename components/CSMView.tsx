@@ -64,8 +64,8 @@ const ObjectiveRow: React.FC<{
 
     return (
         <div className="flex flex-col bg-white rounded-md border border-slate-200 overflow-hidden transition-all duration-200 group">
-            <div className={`flex items-center justify-between p-3 ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50'}`}>
-                <div className="flex items-center flex-grow gap-3 min-w-0">
+            <div className={`flex items-center justify-between p-3 min-w-0 ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50'}`}>
+                <div className="flex items-center flex-grow gap-3 min-w-0 mr-2">
                     <input 
                         type="checkbox" 
                         checked={item.isCompleted} 
@@ -81,13 +81,13 @@ const ObjectiveRow: React.FC<{
                             onChange={e => setText(e.target.value)} 
                             onBlur={handleSave}
                             onKeyDown={handleKeyDown}
-                            className="flex-grow p-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            className="flex-grow p-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-200 min-w-0"
                             onClick={e => e.stopPropagation()}
                         />
                     ) : (
-                        <div className="flex flex-wrap items-center gap-2 flex-grow min-w-0" onClick={() => setIsExpanded(!isExpanded)}>
+                        <div className="flex flex-wrap items-center gap-2 flex-grow min-w-0 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
                             <span 
-                                className={`text-sm font-medium cursor-pointer ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'}`}
+                                className={`text-sm font-medium break-words max-w-full ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'}`}
                             >
                                 {item.text}
                             </span>
@@ -99,7 +99,7 @@ const ObjectiveRow: React.FC<{
                         </div>
                     )}
                 </div>
-                <div className="flex items-center gap-2 ml-2">
+                <div className="flex items-center gap-1 flex-shrink-0">
                     {canEdit && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                              {!isEditing && !item.isCompleted && (
@@ -123,22 +123,22 @@ const ObjectiveRow: React.FC<{
             
             {/* Expanded Content */}
             {isExpanded && (
-                <div className="px-10 pb-3 pt-1 border-t border-slate-100 bg-slate-50 animate-fadeIn">
+                <div className="px-10 pb-3 pt-1 border-t border-slate-100 bg-slate-50 animate-fadeIn overflow-hidden">
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
+                        <div className="min-w-0">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Added</span>
-                            <p className="text-xs text-slate-600">{formatDateTime(item.createdAt)}</p>
+                            <p className="text-xs text-slate-600 truncate">{formatDateTime(item.createdAt)}</p>
                         </div>
                         {item.dueDate && (
-                            <div>
+                            <div className="min-w-0">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target Date</span>
-                                <p className="text-xs text-slate-600">{formatDate(item.dueDate)}</p>
+                                <p className="text-xs text-slate-600 truncate">{formatDate(item.dueDate)}</p>
                             </div>
                         )}
                         {item.isCompleted && item.completedAt && (
-                             <div className="col-span-2">
+                             <div className="col-span-2 min-w-0">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Completed On</span>
-                                <p className="text-xs text-green-600">{formatDateTime(item.completedAt)}</p>
+                                <p className="text-xs text-green-600 truncate">{formatDateTime(item.completedAt)}</p>
                             </div>
                         )}
                     </div>
@@ -176,8 +176,8 @@ const ActionItemRow: React.FC<{
     };
 
     return (
-        <div className="flex items-center justify-between p-2 bg-white rounded-md group hover:shadow-sm border border-transparent hover:border-slate-200 transition-all">
-            <div className="flex items-center flex-grow gap-3 min-w-0">
+        <div className="flex items-center justify-between p-2 bg-white rounded-md group hover:shadow-sm border border-transparent hover:border-slate-200 transition-all overflow-hidden">
+            <div className="flex items-center flex-grow gap-3 min-w-0 mr-2">
                 <input 
                     type="checkbox" 
                     checked={item.isCompleted} 
@@ -193,35 +193,37 @@ const ActionItemRow: React.FC<{
                         onChange={e => setText(e.target.value)} 
                         onBlur={handleSave}
                         onKeyDown={handleKeyDown}
-                        className="flex-grow p-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        className="flex-grow p-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-200 min-w-0"
                     />
                 ) : (
                     <span 
                         onClick={() => canEdit && !item.isCompleted && setIsEditing(true)} 
-                        className={`flex-grow text-sm truncate ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'} ${canEdit && !item.isCompleted ? 'cursor-pointer hover:text-indigo-600' : ''}`}
+                        className={`flex-grow text-sm break-words ${item.isCompleted ? 'text-slate-500 line-through' : 'text-slate-700'} ${canEdit && !item.isCompleted ? 'cursor-pointer hover:text-indigo-600' : ''}`}
                         title={canEdit && !item.isCompleted ? "Click to edit" : ""}
                     >
                         {item.text}
                     </span>
                 )}
             </div>
-            {canEdit && (
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                     {!isEditing && !item.isCompleted && (
-                        <button onClick={() => setIsEditing(true)} className="text-slate-400 hover:text-indigo-600 p-1">
-                            <PencilIcon />
+            <div className="flex items-center gap-2 flex-shrink-0">
+                {canEdit && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         {!isEditing && !item.isCompleted && (
+                            <button onClick={() => setIsEditing(true)} className="text-slate-400 hover:text-indigo-600 p-1">
+                                <PencilIcon />
+                            </button>
+                        )}
+                        <button onClick={() => onDelete(item.id)} className="text-slate-400 hover:text-red-600 p-1">
+                            <TrashIcon />
                         </button>
-                    )}
-                    <button onClick={() => onDelete(item.id)} className="text-slate-400 hover:text-red-600 p-1">
-                        <TrashIcon />
-                    </button>
-                </div>
-            )}
-            {item.isCompleted && item.completedAt && (
-                 <span className="text-xs text-slate-400 whitespace-nowrap ml-2">
-                    {formatDateTime(item.completedAt)}
-                 </span>
-            )}
+                    </div>
+                )}
+                {item.isCompleted && item.completedAt && (
+                     <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                        {formatDateTime(item.completedAt)}
+                     </span>
+                )}
+            </div>
         </div>
     );
 };
@@ -249,7 +251,7 @@ const BugReportRow: React.FC<{
 
     if (isEditing) {
         return (
-            <div className="p-3 bg-indigo-50 rounded-md border border-indigo-200 space-y-2">
+            <div className="p-3 bg-indigo-50 rounded-md border border-indigo-200 space-y-2 overflow-hidden">
                 <div>
                     <label className="block text-xs font-semibold text-indigo-800 mb-1">Bug Description</label>
                     <input 
@@ -280,13 +282,13 @@ const BugReportRow: React.FC<{
     }
 
     return (
-        <div className="flex justify-between items-start p-2 rounded-md group hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-md group hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all overflow-hidden gap-2">
             <div 
-                className={`flex-grow ${canEdit && !item.isCompleted ? 'cursor-pointer' : ''}`} 
+                className={`flex-grow min-w-0 ${canEdit && !item.isCompleted ? 'cursor-pointer' : ''}`} 
                 onClick={() => canEdit && !item.isCompleted && setIsEditing(true)}
                 title={canEdit && !item.isCompleted ? "Click to edit" : ""}
             >
-                <p className={`text-sm ${item.isCompleted ? 'line-through text-slate-500' : 'text-slate-800 group-hover:text-indigo-700'}`}>
+                <p className={`text-sm break-words ${item.isCompleted ? 'line-through text-slate-500' : 'text-slate-800 group-hover:text-indigo-700 font-medium'}`}>
                     {item.name}
                 </p>
                 {item.ticketLink && (
@@ -294,17 +296,16 @@ const BugReportRow: React.FC<{
                         href={item.ticketLink} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        className="text-xs text-indigo-600 hover:underline flex items-center gap-1 mt-0.5 w-fit"
+                        className="text-xs text-indigo-600 hover:underline flex items-center gap-1 mt-1 w-fit whitespace-nowrap overflow-hidden"
                         onClick={(e) => e.stopPropagation()} 
                     >
-                        <LinkIcon /> Ticket
+                        <LinkIcon /> <span className="truncate max-w-[150px]">View Ticket</span>
                     </a>
                 )}
             </div>
-            <div className="flex gap-1 items-center ml-2">
+            <div className="flex gap-2 items-center flex-shrink-0 self-end sm:self-auto">
                 {canEdit && !item.isCompleted && (
-                    // fix: Changed 'id' to 'item.id' to fix line 300 error.
-                     <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-2 h-7 mr-1">Complete</Button>
+                     <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-3 h-8">Complete</Button>
                 )}
                 
                 {canEdit && (
@@ -320,7 +321,7 @@ const BugReportRow: React.FC<{
                     </div>
                 )}
                  {item.isCompleted && item.completedAt && (
-                     <span className="text-xs text-slate-400 whitespace-nowrap">
+                     <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
                         {formatDateTime(item.completedAt)}
                      </span>
                 )}
@@ -352,7 +353,7 @@ const FeatureRequestRow: React.FC<{
 
     if (isEditing) {
         return (
-            <div className="p-3 bg-indigo-50 rounded-md border border-indigo-200 space-y-2">
+            <div className="p-3 bg-indigo-50 rounded-md border border-indigo-200 space-y-2 overflow-hidden">
                 <div>
                      <label className="block text-xs font-semibold text-indigo-800 mb-1">Feature Request</label>
                     <input 
@@ -383,13 +384,13 @@ const FeatureRequestRow: React.FC<{
     }
 
     return (
-        <div className="flex justify-between items-start p-2 rounded-md group hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-md group hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all overflow-hidden gap-2">
              <div 
-                className={`flex-grow ${canEdit && !item.isCompleted ? 'cursor-pointer' : ''}`} 
+                className={`flex-grow min-w-0 ${canEdit && !item.isCompleted ? 'cursor-pointer' : ''}`} 
                 onClick={() => canEdit && !item.isCompleted && setIsEditing(true)}
                 title={canEdit && !item.isCompleted ? "Click to edit" : ""}
             >
-                <p className={`text-sm ${item.isCompleted ? 'line-through text-slate-500' : 'text-slate-800 group-hover:text-indigo-700'}`}>
+                <p className={`text-sm break-words ${item.isCompleted ? 'line-through text-slate-500' : 'text-slate-800 group-hover:text-indigo-700 font-medium'}`}>
                     {item.text}
                 </p>
                 {item.ticketLink && (
@@ -397,17 +398,16 @@ const FeatureRequestRow: React.FC<{
                         href={item.ticketLink} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        className="text-xs text-indigo-600 hover:underline flex items-center gap-1 mt-0.5 w-fit"
+                        className="text-xs text-indigo-600 hover:underline flex items-center gap-1 mt-1 w-fit whitespace-nowrap overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <LinkIcon /> Ticket
+                        <LinkIcon /> <span className="truncate max-w-[150px]">View Ticket</span>
                     </a>
                 )}
             </div>
-            <div className="flex gap-1 items-center ml-2">
+            <div className="flex gap-2 items-center flex-shrink-0 self-end sm:self-auto">
                  {canEdit && !item.isCompleted && (
-                     // fix: Changed 'id' to 'item.id' to fix line 409 error.
-                     <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-2 h-7 mr-1">Complete</Button>
+                     <Button variant="secondary" onClick={() => onComplete(item.id)} className="text-xs py-1 px-3 h-8">Complete</Button>
                  )}
                  {canEdit && (
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -422,7 +422,7 @@ const FeatureRequestRow: React.FC<{
                     </div>
                  )}
                  {item.isCompleted && item.completedAt && (
-                     <span className="text-xs text-slate-400 whitespace-nowrap">
+                     <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
                         {formatDateTime(item.completedAt)}
                      </span>
                 )}
@@ -471,33 +471,33 @@ const TaskCompletionForm: React.FC<{
 
 
     return (
-        <div className="mt-2 p-4 bg-slate-50 rounded-lg space-y-4 border border-slate-200">
-            <div className="bg-white p-3 rounded border border-slate-100">
-                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Task Description</h5>
-                <MarkdownRenderer content={task.description} className="text-sm text-slate-700" />
+        <div className="mt-2 p-4 bg-slate-50 rounded-lg space-y-4 border border-slate-200 overflow-hidden">
+            <div className="bg-white p-3 rounded border border-slate-100 shadow-sm overflow-hidden">
+                <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Task Details</h5>
+                <MarkdownRenderer content={task.description} className="text-sm text-slate-700 leading-relaxed" />
             </div>
 
             {hasCheckbox && (
-                <div className="flex items-center">
+                <div className="flex items-center p-1">
                     <input 
                         id={`complete-${task.id}-${customerId || csmId}`} 
                         type="checkbox" 
                         checked={isCompleted} 
                         onChange={e => setIsCompleted(e.target.checked)} 
                         disabled={!canEdit}
-                        className="h-4 w-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 disabled:opacity-50" 
+                        className="h-5 w-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer disabled:opacity-50" 
                     />
-                    <label htmlFor={`complete-${task.id}-${customerId || csmId}`} className="ml-2 block text-sm font-medium text-slate-700">Mark as Complete</label>
+                    <label htmlFor={`complete-${task.id}-${customerId || csmId}`} className="ml-3 block text-sm font-semibold text-slate-700 cursor-pointer">Mark as Complete</label>
                 </div>
             )}
             {hasMultiSelect && task.multiSelectOptions && (
-                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Response:</label>
+                 <div className="p-1">
+                    <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-tighter text-[10px]">Your Response:</label>
                     <select
                         value={selectedOptions[0] || ''}
                         onChange={handleMultiSelectChange}
                         disabled={!canEdit}
-                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md disabled:bg-slate-100 disabled:text-slate-500"
+                        className="mt-1 block w-full pl-3 pr-10 py-2.5 text-base border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm disabled:bg-slate-100 disabled:text-slate-500"
                     >
                         <option value="">Select an option...</option>
                         {task.multiSelectOptions.map(opt => (
@@ -507,21 +507,22 @@ const TaskCompletionForm: React.FC<{
                 </div>
             )}
             {hasTextArea && (
-                <div>
-                    <label htmlFor={`notes-${task.id}-${customerId || csmId}`} className="block text-sm font-medium text-slate-700">Notes:</label>
+                <div className="p-1">
+                    <label htmlFor={`notes-${task.id}-${customerId || csmId}`} className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-tighter text-[10px]">Additional Notes:</label>
                     <textarea 
                         id={`notes-${task.id}-${customerId || csmId}`} 
                         value={notes} 
                         onChange={e => setNotes(e.target.value)} 
                         disabled={!canEdit}
                         rows={3} 
-                        className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-slate-100"
+                        className="mt-1 block w-full px-3 py-2.5 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-slate-100 break-words"
+                        placeholder="Type any relevant information here..."
                     ></textarea>
                 </div>
             )}
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
                 <Button variant="secondary" onClick={onCancel}>Cancel</Button>
-                {canEdit && <Button onClick={handleSave}>Save</Button>}
+                {canEdit && <Button onClick={handleSave}>Save Completion</Button>}
             </div>
         </div>
     )
@@ -830,42 +831,44 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const openFeatures = entityFeatures.filter(f => !f.isCompleted);
     const completedFeatures = entityFeatures.filter(f => f.isCompleted);
     
-    if (!entity) return <div className="flex-grow flex items-center justify-center text-slate-500">Select an item to see the agenda.</div>;
+    if (!entity) return <div className="flex-grow flex items-center justify-center text-slate-500 py-12">Select an item to see the agenda.</div>;
 
     return (
-        <div className="flex-grow space-y-4 pb-8">
+        <div className="flex-grow space-y-6 pb-12 overflow-hidden">
             {/* 1. COLLAPSIBLE OBJECTIVES SECTION */}
             <details 
-                className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" 
+                className="bg-white shadow-sm rounded-lg overflow-hidden transition-all duration-300 open:ring-2 open:ring-indigo-100" 
                 onToggle={(e) => setIsObjectivesSectionOpen((e.target as HTMLDetailsElement).open)}
                 open={isObjectivesSectionOpen}
             >
-                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
+                <summary className="p-5 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
                     <div className="flex items-center gap-2">
                          Objectives ({activeObjectives.length})
                     </div>
                     <ChevronDownIcon className={`transition-transform transform ${isObjectivesSectionOpen ? 'rotate-180' : ''}`} />
                 </summary>
-                <div className="p-6 pt-0">
+                <div className="p-5 pt-0 overflow-hidden">
                     {canEdit && (
-                        <form onSubmit={handleAddObjective} className="flex flex-col sm:flex-row gap-2 mb-6 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                        <form onSubmit={handleAddObjective} className="flex flex-col sm:flex-row gap-3 mb-6 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
                             <input 
                                 type="text" 
                                 value={newObjective} 
                                 onChange={e => setNewObjective(e.target.value)} 
-                                placeholder="Set a new objective..." 
-                                className="flex-grow p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                placeholder="What is the goal?..." 
+                                className="flex-grow p-2.5 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none text-sm min-w-0" 
                             />
-                            <input 
-                                type="date" 
-                                value={objectiveDate} 
-                                onChange={e => setObjectiveDate(e.target.value)} 
-                                className="p-2 border border-slate-200 rounded-md text-sm text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                            />
-                            <Button type="submit">Set</Button>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="date" 
+                                    value={objectiveDate} 
+                                    onChange={e => setObjectiveDate(e.target.value)} 
+                                    className="p-2.5 border border-slate-200 rounded-md text-sm text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none flex-1" 
+                                />
+                                <Button type="submit" className="flex-shrink-0">Set Objective</Button>
+                            </div>
                         </form>
                     )}
-                    <div className="space-y-3">
+                    <div className="space-y-3 overflow-hidden">
                         {activeObjectives.map(obj => (
                             <ObjectiveRow 
                                 key={obj.id} 
@@ -876,20 +879,20 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                 canEdit={canEdit} 
                             />
                         ))}
-                        {activeObjectives.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No active objectives.</p>}
+                        {activeObjectives.length === 0 && <p className="text-slate-400 text-sm italic text-center py-6 bg-slate-50/50 rounded-lg">No active objectives.</p>}
                     </div>
                     
                     {completedObjectives.length > 0 && (
                         <div className="mt-6 border-t border-slate-100 pt-4">
                             <button 
                                 onClick={() => setShowArchivedObjectives(!showArchivedObjectives)}
-                                className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
+                                className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
                             >
-                                <ChevronDownIcon className={`w-4 h-4 transform transition-transform ${showArchivedObjectives ? 'rotate-180' : ''}`} />
-                                Archived Objectives ({completedObjectives.length})
+                                <ChevronDownIcon className={`w-3 h-3 transform transition-transform ${showArchivedObjectives ? 'rotate-180' : ''}`} />
+                                View Archived Objectives ({completedObjectives.length})
                             </button>
                             {showArchivedObjectives && (
-                                <div className="mt-3 space-y-2 animate-fadeIn">
+                                <div className="mt-3 space-y-2 animate-fadeIn overflow-hidden">
                                     {completedObjectives.map(obj => (
                                         <ObjectiveRow 
                                             key={obj.id} 
@@ -909,24 +912,24 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
             {/* 2. COLLAPSIBLE ACTION ITEMS SECTION */}
             <details 
-                className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" 
+                className="bg-white shadow-sm rounded-lg overflow-hidden transition-all duration-300 open:ring-2 open:ring-indigo-100" 
                 onToggle={(e) => setIsActionItemsSectionOpen((e.target as HTMLDetailsElement).open)}
                 open={isActionItemsSectionOpen}
             >
-                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
+                <summary className="p-5 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
                     <div className="flex items-center gap-2">
                         Action Items ({incompleteActionItems.length})
                     </div>
                     <ChevronDownIcon className={`transition-transform transform ${isActionItemsSectionOpen ? 'rotate-180' : ''}`} />
                 </summary>
-                <div className="p-6 pt-0">
+                <div className="p-5 pt-0 overflow-hidden">
                     {canEdit && (
-                        <form onSubmit={handleAddActionItem} className="flex gap-2 mb-4 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
-                            <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" />
-                            <Button type="submit">Add</Button>
+                        <form onSubmit={handleAddActionItem} className="flex gap-2 mb-6 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                            <input type="text" value={newActionItem} onChange={e => setNewActionItem(e.target.value)} placeholder="Add a new action item..." className="flex-grow p-2.5 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none text-sm min-w-0" />
+                            <Button type="submit" className="flex-shrink-0">Add Item</Button>
                         </form>
                     )}
-                    <div className="space-y-2">
+                    <div className="space-y-2 overflow-hidden">
                         {incompleteActionItems.map(ai => (
                              <ActionItemRow 
                                 key={ai.id} 
@@ -937,10 +940,10 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                 canEdit={canEdit} 
                             />
                         ))}
-                        {incompleteActionItems.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No active action items.</p>}
+                        {incompleteActionItems.length === 0 && <p className="text-slate-400 text-sm italic text-center py-6 bg-slate-50/50 rounded-lg">All items completed!</p>}
                     </div>
                     {completedActionItems.length > 0 && (
-                        <div className="mt-6 border-t border-slate-100 pt-4 space-y-2">
+                        <div className="mt-6 border-t border-slate-100 pt-4 space-y-2 overflow-hidden">
                              {visibleCompleted.map(ai => (
                                  <ActionItemRow 
                                     key={ai.id} 
@@ -952,8 +955,8 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                 />
                             ))}
                             {completedActionItems.length > 3 && (
-                                <Button variant="secondary" onClick={() => setShowOlderCompleted(!showOlderCompleted)} className="w-full mt-2">
-                                    {showOlderCompleted ? 'Hide older items' : `Show ${completedActionItems.length - 3} older items...`}
+                                <Button variant="secondary" onClick={() => setShowOlderCompleted(!showOlderCompleted)} className="w-full mt-2 py-1 text-xs">
+                                    {showOlderCompleted ? 'Hide History' : `Show ${completedActionItems.length - 3} Previous Items`}
                                 </Button>
                             )}
                         </div>
@@ -963,90 +966,98 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 
             {/* 3. COLLAPSIBLE MANAGER TASKS SECTION */}
             <details 
-                className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" 
+                className="bg-white shadow-sm rounded-lg overflow-hidden transition-all duration-300 open:ring-2 open:ring-indigo-100" 
                 onToggle={(e) => setIsManagerTasksOpen((e.target as HTMLDetailsElement).open)}
                 open={isManagerTasksOpen}
             >
-                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
+                <summary className="p-5 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
                     <div className="flex items-center gap-2">
-                         Manager Assigned Tasks ({activeManagerTasksCount})
+                         Assigned Tasks ({activeManagerTasksCount})
                     </div>
                     <ChevronDownIcon className={`transition-transform transform ${isManagerTasksOpen ? 'rotate-180' : ''}`} />
                 </summary>
-                <div className="p-6 pt-0">
-                    <div className="space-y-4">
+                <div className="p-5 pt-0 overflow-hidden">
+                    <div className="space-y-4 overflow-hidden">
                         {managerTasks.map(task => {
                             const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entity.id));
                             const isEditing = editingTaskId === task.id;
                             const isComplete = completion?.isCompleted || false;
 
                             return (
-                                <div key={task.id} className={`p-3 rounded-md border ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}>
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-start flex-grow">
-                                            {isComplete ? <CheckCircleIcon className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-5 w-5 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0"></div>}
-                                            <div className="flex-grow">
-                                                <p className="font-semibold text-slate-800 text-lg">{task.title}</p>
+                                <div key={task.id} className={`p-4 rounded-md border overflow-hidden transition-all duration-200 ${isComplete ? 'bg-green-50/50 border-green-200 shadow-sm' : 'bg-white border-slate-200 shadow-sm'}`}>
+                                    <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                                        <div className="flex items-start flex-grow min-w-0 w-full">
+                                            {isComplete ? <CheckCircleIcon className="h-6 w-6 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-6 w-6 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0 bg-white"></div>}
+                                            <div className="flex-grow min-w-0">
+                                                <p className="font-bold text-slate-800 text-lg break-words leading-tight mb-2">{task.title}</p>
                                                 
-                                                <div className="mt-2 mb-3">
-                                                    <MarkdownRenderer content={task.description} className="text-slate-700 text-base" />
+                                                <div className="mt-1 mb-3">
+                                                    <MarkdownRenderer content={task.description} className="text-slate-600 text-sm leading-relaxed" />
                                                 </div>
 
-                                                <p className={`text-sm mt-1 font-semibold ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-500' : 'text-slate-600'}`}>Due: {formatDate(task.dueDate)}</p>
+                                                <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
+                                                    <span className={`px-2 py-0.5 rounded ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-600 bg-red-50' : 'text-slate-500 bg-slate-100'}`}>
+                                                        Due: {formatDate(task.dueDate)}
+                                                    </span>
+                                                    {isComplete && <span className="text-green-600 font-bold uppercase tracking-wider text-[10px]">Complete</span>}
+                                                </div>
+
                                                 {isComplete && completion && (
-                                                    <div className="text-sm mt-1 text-slate-600 italic space-y-1">
-                                                        {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p>Notes: "{completion.notes}"</p>}
+                                                    <div className="mt-4 p-3 bg-white/60 rounded border border-green-100 text-xs text-slate-600 italic space-y-2 overflow-hidden">
+                                                        {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p className="break-words"><strong>Note:</strong> "{completion.notes}"</p>}
                                                         {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
-                                                            <p>Response: <span className="font-semibold not-italic">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
+                                                            <p><strong>Response:</strong> <span className="font-bold not-italic text-slate-800">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
                                                         }
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
                                         {!isEditing && canEdit && (
-                                            <Button variant="secondary" onClick={() => setEditingTaskId(task.id)}>
-                                                {completion ? 'Edit' : 'Complete'}
+                                            <Button variant={isComplete ? "secondary" : "primary"} onClick={() => setEditingTaskId(task.id)} className="w-full sm:w-auto flex-shrink-0 shadow-none">
+                                                {isComplete ? 'Update' : 'Complete Task'}
                                             </Button>
                                         )}
                                     </div>
                                     {isEditing && canEdit && (
-                                        <TaskCompletionForm 
-                                            task={task} 
-                                            customerId={isCsmView ? undefined : entityId}
-                                            csmId={isCsmView ? entityId : undefined}
-                                            existingCompletion={completion} 
-                                            onSave={(data) => handleSaveCompletion(task.id, data)}
-                                            onCancel={() => setEditingTaskId(null)}
-                                            canEdit={canEdit}
-                                        />
+                                        <div className="mt-6 border-t border-slate-100 pt-4">
+                                            <TaskCompletionForm 
+                                                task={task} 
+                                                customerId={isCsmView ? undefined : entityId}
+                                                csmId={isCsmView ? entityId : undefined}
+                                                existingCompletion={completion} 
+                                                onSave={(data) => handleSaveCompletion(task.id, data)}
+                                                onCancel={() => setEditingTaskId(null)}
+                                                canEdit={canEdit}
+                                            />
+                                        </div>
                                     )}
                                 </div>
                             );
                         })}
-                        {managerTasks.length === 0 && <p className="text-slate-500 text-center py-4 italic">No tasks assigned by manager.</p>}
+                        {managerTasks.length === 0 && <p className="text-slate-400 text-center py-8 italic bg-slate-50/50 rounded-lg">No manager tasks assigned.</p>}
                     </div>
                 </div>
             </details>
 
             {/* 4. OPEN BUGS SECTION */}
-            <details className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200" onToggle={(e) => setIsBugsSectionOpen((e.target as HTMLDetailsElement).open)} open={isBugsSectionOpen}>
-                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
+            <details className="bg-white shadow-sm rounded-lg overflow-hidden transition-all duration-300 open:ring-2 open:ring-indigo-100" onToggle={(e) => setIsBugsSectionOpen((e.target as HTMLDetailsElement).open)} open={isBugsSectionOpen}>
+                <summary className="p-5 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
                     <div className="flex items-center gap-2">
                         <BugAntIcon /> Open Bugs ({openBugs.length})
                     </div>
                     <ChevronDownIcon className={`transition-transform transform ${isBugsSectionOpen ? 'rotate-180' : ''}`} />
                 </summary>
-                <div className="p-6 pt-0">
+                <div className="p-5 pt-0 overflow-hidden">
                     {canEdit && (
-                        <form onSubmit={handleAddBug} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
-                            <input type="text" value={newBugName} onChange={e => setNewBugName(e.target.value)} placeholder="Bug name or description..." className="p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                        <form onSubmit={handleAddBug} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6 p-4 bg-red-50/30 rounded-lg border border-red-100">
+                            <input type="text" value={newBugName} onChange={e => setNewBugName(e.target.value)} placeholder="Bug description..." className="p-2.5 border border-slate-200 rounded-md focus:ring-2 focus:ring-red-400 outline-none text-sm min-w-0" required />
                             <div className="flex gap-2">
-                                <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Link to ticket..." className="flex-grow p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" />
-                                <Button type="submit">Add Bug</Button>
+                                <input type="text" value={newBugLink} onChange={e => setNewBugLink(e.target.value)} placeholder="Ticket link (URL)..." className="flex-grow p-2.5 border border-slate-200 rounded-md focus:ring-2 focus:ring-red-400 outline-none text-sm min-w-0" />
+                                <Button type="submit" variant="primary" className="bg-red-600 hover:bg-red-700">Add Bug</Button>
                             </div>
                         </form>
                     )}
-                    <div className="space-y-2">
+                    <div className="space-y-1 overflow-hidden">
                         {openBugs.map(bug => (
                              <BugReportRow 
                                 key={bug.id} 
@@ -1057,16 +1068,19 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                 canEdit={canEdit} 
                              />
                         ))}
-                        {openBugs.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No open bugs.</p>}
+                        {openBugs.length === 0 && <p className="text-slate-400 text-sm italic text-center py-6 bg-slate-50/50 rounded-lg">Clean slate! No open bugs.</p>}
                     </div>
                     {completedBugs.length > 0 && (
-                        <>
-                            <hr className="my-4 border-slate-100" />
-                            <Button variant="secondary" onClick={() => setShowCompletedBugs(!showCompletedBugs)} className="w-full">
-                                {showCompletedBugs ? 'Hide' : 'Show'} {completedBugs.length} Completed Bug{completedBugs.length > 1 ? 's' : ''}
-                            </Button>
+                        <div className="mt-6 border-t border-slate-100 pt-4 overflow-hidden">
+                            <button 
+                                onClick={() => setShowCompletedBugs(!showCompletedBugs)}
+                                className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
+                            >
+                                <ChevronDownIcon className={`w-3 h-3 transform transition-transform ${showCompletedBugs ? 'rotate-180' : ''}`} />
+                                Resolved Bugs ({completedBugs.length})
+                            </button>
                             {showCompletedBugs && (
-                                <div className="mt-4 space-y-2">
+                                <div className="mt-3 space-y-1 animate-fadeIn overflow-hidden">
                                     {completedBugs.map(bug => (
                                          <BugReportRow 
                                             key={bug.id} 
@@ -1079,30 +1093,30 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                     ))}
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
                 </div>
             </details>
             
             {/* 5. FEATURE REQUESTS SECTION */}
-            <details className="bg-white shadow-sm rounded-lg open:ring-2 open:ring-indigo-200">
-                <summary className="p-6 font-bold text-slate-800 text-xl cursor-pointer flex items-center gap-2 list-none justify-between">
+            <details className="bg-white shadow-sm rounded-lg overflow-hidden transition-all duration-300 open:ring-2 open:ring-indigo-100">
+                <summary className="p-5 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
                      <div className="flex items-center gap-2">
                         <LightBulbIcon /> Feature Requests ({openFeatures.length})
                     </div>
                     <ChevronDownIcon className="transition-transform transform details-open:-rotate-180" />
                 </summary>
-                <div className="p-6 pt-0">
+                <div className="p-5 pt-0 overflow-hidden">
                     {canEdit && (
-                        <form onSubmit={handleAddFeatureRequest} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100">
-                            <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="Add a new feature request..." className="p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                        <form onSubmit={handleAddFeatureRequest} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6 p-4 bg-indigo-50/30 rounded-lg border border-indigo-100">
+                            <input type="text" value={newFeatureRequest} onChange={e => setNewFeatureRequest(e.target.value)} placeholder="What functionality is missing?..." className="p-2.5 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none text-sm min-w-0" required />
                             <div className="flex gap-2">
-                                <input type="text" value={newFeatureLink} onChange={e => setNewFeatureLink(e.target.value)} placeholder="Link to request (optional)..." className="flex-grow p-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none" />
+                                <input type="text" value={newFeatureLink} onChange={e => setNewFeatureLink(e.target.value)} placeholder="Tracking link (optional)..." className="flex-grow p-2.5 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none text-sm min-w-0" />
                                 <Button type="submit">Add Request</Button>
                             </div>
                         </form>
                     )}
-                    <div className="space-y-2">
+                    <div className="space-y-1 overflow-hidden">
                         {openFeatures.map(fr => (
                              <FeatureRequestRow 
                                 key={fr.id} 
@@ -1113,17 +1127,20 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                 canEdit={canEdit} 
                              />
                         ))}
-                        {openFeatures.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No open feature requests.</p>}
+                        {openFeatures.length === 0 && <p className="text-slate-400 text-sm italic text-center py-6 bg-slate-50/50 rounded-lg">No pending feature requests.</p>}
                     </div>
 
                     {completedFeatures.length > 0 && (
-                        <>
-                            <hr className="my-4 border-slate-100" />
-                            <Button variant="secondary" onClick={() => setShowCompletedFeatures(!showCompletedFeatures)} className="w-full">
-                                {showCompletedFeatures ? 'Hide' : 'Show'} {completedFeatures.length} Completed Request{completedFeatures.length > 1 ? 's' : ''}
-                            </Button>
+                        <div className="mt-6 border-t border-slate-100 pt-4 overflow-hidden">
+                            <button 
+                                onClick={() => setShowCompletedFeatures(!showCompletedFeatures)}
+                                className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
+                            >
+                                <ChevronDownIcon className={`w-3 h-3 transform transition-transform ${showCompletedFeatures ? 'rotate-180' : ''}`} />
+                                Released Features ({completedFeatures.length})
+                            </button>
                             {showCompletedFeatures && (
-                                <div className="mt-4 space-y-2">
+                                <div className="mt-3 space-y-1 animate-fadeIn overflow-hidden">
                                     {completedFeatures.map(fr => (
                                          <FeatureRequestRow 
                                             key={fr.id} 
@@ -1136,29 +1153,29 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
                                     ))}
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
                 </div>
             </details>
 
             {/* 6. NOTES SECTION */}
-            <Card>
-                <div className="flex justify-between items-center mb-2">
-                     <h2 className="text-xl font-bold text-slate-800">{isCsmView ? 'Personal Notes' : 'Notes'}</h2>
-                     {isSavingNotes && <span className="text-xs text-slate-500 animate-pulse">Saving...</span>}
+            <Card className="overflow-hidden border-none shadow-sm ring-1 ring-slate-200">
+                <div className="flex justify-between items-center mb-4">
+                     <h2 className="text-xl font-bold text-slate-800">{isCsmView ? 'Personal Work Notes' : 'Customer Account Notes'}</h2>
+                     {isSavingNotes && <span className="text-[10px] font-bold text-indigo-500 animate-pulse uppercase tracking-widest">Saving Changes...</span>}
                 </div>
                  <textarea 
                     value={currentNotes} 
                     onChange={e => setCurrentNotes(e.target.value)} 
                     disabled={!canEdit}
-                    rows={6} 
-                    className="w-full p-2 border rounded-md disabled:bg-slate-100 disabled:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                    placeholder={canEdit ? "Start typing notes... (Auto-saves)" : "No notes available."}
+                    rows={8} 
+                    className="w-full p-4 border border-slate-200 rounded-md disabled:bg-slate-50 disabled:text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none text-sm transition-all shadow-inner leading-relaxed" 
+                    placeholder={canEdit ? "Start typing account updates or meeting notes here... (Changes are saved automatically)" : "No notes available for this account."}
                 ></textarea>
                  {canEdit && (
-                    <div className="flex justify-end gap-2 mt-2">
-                        <Button onClick={handleSummarizeNotes} disabled={isSummarizing}>
-                            <SparklesIcon /> {isSummarizing ? 'Summarizing...' : 'Summarize'}
+                    <div className="flex justify-end gap-2 mt-4">
+                        <Button variant="secondary" onClick={handleSummarizeNotes} disabled={isSummarizing || !currentNotes} className="shadow-none border-slate-200">
+                            <SparklesIcon /> {isSummarizing ? 'Analyzing...' : 'AI Summary'}
                         </Button>
                     </div>
                  )}
@@ -1168,7 +1185,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
 };
 
 const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
-    const { customers, users, currentUser } = useAppContext();
+    const { customers, users, currentUser, tasks, taskCompletions } = useAppContext();
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -1186,86 +1203,145 @@ const CSMView: React.FC<{ csmId: string }> = ({ csmId }) => {
         return false;
     }, [currentUser, csmId]);
 
+    // Counter helper for manager assigned tasks
+    const getIncompleteTaskCount = (entityId: string, entityType: 'csm' | 'customer') => {
+        return tasks.filter(task => {
+            if (task.isArchived) return false;
+            
+            const isAssigned = entityType === 'csm'
+                ? (task.assignmentType === 'csm' && task.assignedCsmIds?.includes(entityId))
+                : (task.assignmentType === 'customer' && task.assignedCustomerIds.includes(entityId));
+            
+            if (!isAssigned) return false;
+
+            const completion = taskCompletions.find(tc => 
+                tc.taskId === task.id && 
+                (entityType === 'csm' ? tc.csmId === entityId : tc.customerId === entityId)
+            );
+            return !completion?.isCompleted;
+        }).length;
+    };
+
     return (
-        <div className="flex flex-col md:flex-row gap-6 transition-all duration-300 ease-in-out">
+        <div className="flex flex-col md:flex-row gap-6 transition-all duration-300 ease-in-out min-h-[calc(100vh-12rem)]">
             <div 
                 className={`transition-all duration-300 ease-in-out flex-shrink-0 ${
                     isSidebarOpen ? 'w-full md:w-1/4' : 'w-full md:w-16'
                 }`}
             >
-                <Card className={`p-4 h-full flex flex-col ${!isSidebarOpen ? 'items-center' : ''}`}>
-                    <div className={`flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'} mb-4`}>
+                <Card className={`p-4 h-full flex flex-col shadow-none ring-1 ring-slate-200 ${!isSidebarOpen ? 'items-center' : ''}`}>
+                    <div className={`flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'} mb-6 pb-4 border-b border-slate-100`}>
                         {isSidebarOpen && (
-                            <h3 className="font-bold text-slate-700 truncate mr-2" title={viewingUser?.name}>
-                                {viewingUser?.name || 'CSM'}'s Dashboard
-                            </h3>
+                            <div className="min-w-0">
+                                <h3 className="font-bold text-slate-800 truncate" title={viewingUser?.name}>
+                                    {viewingUser?.name || 'CSM'}
+                                </h3>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">Dashboard</p>
+                            </div>
                         )}
                         <button 
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className="text-slate-500 hover:text-indigo-600 p-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                            className="text-slate-400 hover:text-indigo-600 p-2 rounded-md hover:bg-slate-50 transition-colors flex-shrink-0"
                             title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                         >
                             {isSidebarOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
                         </button>
                     </div>
                     
-                    <div className={`space-y-4 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'} transition-opacity duration-200`}>
+                    <div className={`space-y-6 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 hidden'} transition-opacity duration-200 flex-grow overflow-y-auto`}>
                         <div className="space-y-1">
                              <button
                                 onClick={() => setSelectedCustomerId(null)}
-                                className={`w-full text-left px-3 py-2 rounded-md transition-colors flex items-center gap-2 ${selectedCustomerId === null ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-600'}`}
+                                className={`w-full text-left px-3 py-2.5 rounded-md transition-all flex items-center gap-3 group ${selectedCustomerId === null ? 'bg-indigo-600 text-white font-bold shadow-md' : 'hover:bg-slate-100 text-slate-600'}`}
                             >
-                                <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
-                                My Personal Tasks
+                                {(() => {
+                                    const count = getIncompleteTaskCount(csmId, 'csm');
+                                    return (
+                                        <div className={`flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold ${selectedCustomerId === null ? 'bg-white text-indigo-700' : (count > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500')}`}>
+                                            {count}
+                                        </div>
+                                    );
+                                })()}
+                                <span className="text-sm">My Personal Work</span>
                             </button>
                         </div>
                         
                         <div>
-                            <h4 className="font-semibold text-slate-600 mb-2 px-3 text-sm uppercase tracking-wider">Customers</h4>
+                            <div className="flex items-center justify-between mb-3 px-3">
+                                <h4 className="font-bold text-slate-400 text-[10px] uppercase tracking-widest">Portfolio</h4>
+                                <span className="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded font-bold">{myCustomers.length}</span>
+                            </div>
                             <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-1">
-                                {myCustomers.map(customer => (
-                                     <button
-                                        key={customer.id}
-                                        onClick={() => setSelectedCustomerId(customer.id)}
-                                        className={`w-full text-left px-3 py-2 rounded-md transition-colors truncate flex items-center gap-2 ${selectedCustomerId === customer.id ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-600'}`}
-                                        title={customer.name}
-                                    >
-                                        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${selectedCustomerId === customer.id ? 'bg-indigo-500' : 'bg-slate-300'}`}></span>
-                                        <span className="truncate">{customer.name}</span>
-                                    </button>
-                                ))}
-                                {myCustomers.length === 0 && <p className="px-3 text-sm text-slate-400">No customers assigned.</p>}
+                                {myCustomers.map(customer => {
+                                    const count = getIncompleteTaskCount(customer.id, 'customer');
+                                    const isSelected = selectedCustomerId === customer.id;
+                                    return (
+                                         <button
+                                            key={customer.id}
+                                            onClick={() => setSelectedCustomerId(customer.id)}
+                                            className={`w-full text-left px-3 py-2.5 rounded-md transition-all truncate flex items-center gap-3 group ${isSelected ? 'bg-indigo-600 text-white font-bold shadow-md' : 'hover:bg-slate-100 text-slate-600'}`}
+                                            title={customer.name}
+                                        >
+                                            <div className={`flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full text-[10px] font-bold ${isSelected ? 'bg-white text-indigo-700' : (count > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500')}`}>
+                                                {count}
+                                            </div>
+                                            <span className="truncate text-sm">{customer.name}</span>
+                                        </button>
+                                    );
+                                })}
+                                {myCustomers.length === 0 && <p className="px-3 text-sm text-slate-400 italic">No assigned customers.</p>}
                             </div>
                         </div>
                     </div>
 
                     {!isSidebarOpen && (
-                         <div className="flex flex-col gap-4 w-full items-center mt-2 animate-fadeIn">
+                         <div className="flex flex-col gap-4 w-full items-center mt-2 animate-fadeIn overflow-hidden">
                              <button
                                 onClick={() => { setSelectedCustomerId(null); }}
-                                className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${selectedCustomerId === null ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:bg-slate-100'}`}
+                                className={`w-10 h-10 flex flex-col items-center justify-center rounded-lg transition-all relative ${selectedCustomerId === null ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}
                                 title="My Personal Tasks"
                             >
-                                <span className="font-bold text-xs">Me</span>
+                                <span className="font-bold text-[10px] uppercase">Me</span>
+                                {(() => {
+                                    const count = getIncompleteTaskCount(csmId, 'csm');
+                                    return count > 0 && (
+                                        <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] px-1 rounded-full border border-white">
+                                            {count}
+                                        </div>
+                                    );
+                                })()}
                             </button>
                             
-                            <div className="w-full border-t border-slate-200 my-1"></div>
+                            <div className="w-8 border-t border-slate-200 my-2"></div>
 
-                            {selectedCustomerId && (
-                                <div 
-                                    className="w-8 h-8 flex items-center justify-center rounded-md bg-indigo-100 text-indigo-700 font-bold text-xs cursor-default"
-                                    title={myCustomers.find(c => c.id === selectedCustomerId)?.name}
-                                >
-                                    {myCustomers.find(c => c.id === selectedCustomerId)?.name.substring(0,2).toUpperCase()}
-                                </div>
-                            )}
+                            <div className="flex flex-col gap-2 overflow-y-auto max-h-[60vh]">
+                                {myCustomers.map(c => {
+                                    const count = getIncompleteTaskCount(c.id, 'customer');
+                                    const isSelected = selectedCustomerId === c.id;
+                                    return (
+                                        <button
+                                            key={c.id}
+                                            onClick={() => setSelectedCustomerId(c.id)}
+                                            className={`w-10 h-10 flex flex-shrink-0 items-center justify-center rounded-lg transition-all font-bold text-xs relative ${isSelected ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                            title={c.name}
+                                        >
+                                            {c.name.substring(0,2).toUpperCase()}
+                                            {count > 0 && (
+                                                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] px-1 rounded-full border border-white">
+                                                    {count}
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                          </div>
                     )}
 
                 </Card>
             </div>
             
-            <div className="flex-grow w-full min-w-0">
+            <div className="flex-grow w-full min-w-0 overflow-hidden">
                 <Agenda 
                     key={selectedCustomerId || csmId} 
                     entityId={selectedCustomerId || csmId} 
