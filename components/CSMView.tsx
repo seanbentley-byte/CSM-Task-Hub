@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppContext } from './AppContext';
 import { Card, Button, CheckCircleIcon, SearchIcon, SparklesIcon, TrashIcon, BugAntIcon, LightBulbIcon, LinkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, UsersIcon, MarkdownRenderer, PencilIcon } from './ui';
-import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest, Objective } from '../types';
+import { Task, CSMInputType, TaskCompletion, ActionItem, BugReport, FeatureRequest, Objective, TaskUrgency } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
 const formatDate = (dateStr: string) => {
@@ -545,6 +545,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const [showCompletedBugs, setShowCompletedBugs] = useState(false);
     const [showCompletedFeatures, setShowCompletedFeatures] = useState(false);
     const [showArchivedObjectives, setShowArchivedObjectives] = useState(false);
+    const [showCompletedManagerTasks, setShowCompletedManagerTasks] = useState(false);
     const [isObjectivesSectionOpen, setIsObjectivesSectionOpen] = useState(false);
     const [isActionItemsSectionOpen, setIsActionItemsSectionOpen] = useState(true);
     const [isManagerTasksOpen, setIsManagerTasksOpen] = useState(true);
@@ -620,19 +621,44 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     const entityBugs = useMemo(() => bugReports.filter(b => isCsmView ? b.csmId === entityId : b.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [bugReports, entityId, isCsmView]);
     const entityFeatures = useMemo(() => featureRequests.filter(fr => isCsmView ? fr.csmId === entityId : fr.customerId === entityId).sort((a, b) => b.createdAt - a.createdAt), [featureRequests, entityId, isCsmView]);
     
-    const managerTasks = useMemo(() => tasks.filter(t => {
-        if (t.isArchived) return false;
-        
-        if (isCsmView) {
-            return t.assignmentType === 'csm' && t.assignedCsmIds?.includes(entityId)
-        }
-        return t.assignmentType === 'customer' && t.assignedCustomerIds.includes(entityId)
-    }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [tasks, entityId, isCsmView]);
+    const urgencyMap: Record<TaskUrgency, number> = {
+        [TaskUrgency.High]: 0,
+        [TaskUrgency.Medium]: 1,
+        [TaskUrgency.Low]: 2,
+    };
 
-    const activeManagerTasksCount = useMemo(() => managerTasks.filter(task => {
-        const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
-        return !completion?.isCompleted;
-    }).length, [managerTasks, taskCompletions, entityId, isCsmView]);
+    const sortedManagerTasks = useMemo(() => {
+        return tasks.filter(t => {
+            if (t.isArchived) return false;
+            
+            if (isCsmView) {
+                return t.assignmentType === 'csm' && t.assignedCsmIds?.includes(entityId)
+            }
+            return t.assignmentType === 'customer' && t.assignedCustomerIds.includes(entityId)
+        }).sort((a, b) => {
+            // Sort by Urgency first
+            const urgencyA = urgencyMap[a.urgency || TaskUrgency.Medium];
+            const urgencyB = urgencyMap[b.urgency || TaskUrgency.Medium];
+            if (urgencyA !== urgencyB) return urgencyA - urgencyB;
+            
+            // Sort by Due Date second
+            return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        });
+    }, [tasks, entityId, isCsmView]);
+
+    const activeManagerTasks = useMemo(() => {
+        return sortedManagerTasks.filter(task => {
+            const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
+            return !completion?.isCompleted;
+        });
+    }, [sortedManagerTasks, taskCompletions, entityId, isCsmView]);
+
+    const completedManagerTasks = useMemo(() => {
+        return sortedManagerTasks.filter(task => {
+            const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entityId));
+            return completion?.isCompleted;
+        });
+    }, [sortedManagerTasks, taskCompletions, entityId, isCsmView]);
 
     const handleSummarizeNotes = async () => {
          if (!currentNotes || !canEdit) return;
@@ -833,6 +859,75 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     
     if (!entity) return <div className="flex-grow flex items-center justify-center text-slate-500 py-12">Select an item to see the agenda.</div>;
 
+    const renderTaskCard = (task: Task) => {
+        const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entity.id));
+        const isEditing = editingTaskId === task.id;
+        const isComplete = completion?.isCompleted || false;
+
+        const getUrgencyColor = (urgency: TaskUrgency) => {
+            switch (urgency) {
+                case TaskUrgency.High: return 'bg-red-600 text-white';
+                case TaskUrgency.Medium: return 'bg-yellow-500 text-white';
+                case TaskUrgency.Low: return 'bg-slate-400 text-white';
+                default: return 'bg-slate-400 text-white';
+            }
+        };
+
+        return (
+            <div key={task.id} className={`p-4 rounded-md border overflow-hidden transition-all duration-200 ${isComplete ? 'bg-green-50/50 border-green-200 shadow-sm opacity-75' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                    <div className="flex items-start flex-grow min-w-0 w-full">
+                        {isComplete ? <CheckCircleIcon className="h-6 w-6 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-6 w-6 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0 bg-white"></div>}
+                        <div className="flex-grow min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <p className="font-bold text-slate-800 text-lg break-words leading-tight">{task.title}</p>
+                                <span className={`px-1.5 py-0.5 text-[8px] font-bold rounded uppercase tracking-wider ${getUrgencyColor(task.urgency)}`}>{task.urgency}</span>
+                            </div>
+                            
+                            <div className="mt-1 mb-3">
+                                <MarkdownRenderer content={task.description} className="text-slate-600 text-sm leading-relaxed" />
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
+                                <span className={`px-2 py-0.5 rounded ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-600 bg-red-50' : 'text-slate-500 bg-slate-100'}`}>
+                                    Due: {formatDate(task.dueDate)}
+                                </span>
+                                {isComplete && <span className="text-green-600 font-bold uppercase tracking-wider text-[10px]">Complete</span>}
+                            </div>
+
+                            {isComplete && completion && (
+                                <div className="mt-4 p-3 bg-white/60 rounded border border-green-100 text-xs text-slate-600 italic space-y-2 overflow-hidden">
+                                    {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p className="break-words"><strong>Note:</strong> "{completion.notes}"</p>}
+                                    {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
+                                        <p><strong>Response:</strong> <span className="font-bold not-italic text-slate-800">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
+                                    }
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    {!isEditing && canEdit && (
+                        <Button variant={isComplete ? "secondary" : "primary"} onClick={() => setEditingTaskId(task.id)} className="w-full sm:w-auto flex-shrink-0 shadow-none">
+                            {isComplete ? 'Update' : 'Complete Task'}
+                        </Button>
+                    )}
+                </div>
+                {isEditing && canEdit && (
+                    <div className="mt-6 border-t border-slate-100 pt-4">
+                        <TaskCompletionForm 
+                            task={task} 
+                            customerId={isCsmView ? undefined : entityId}
+                            csmId={isCsmView ? entityId : undefined}
+                            existingCompletion={completion} 
+                            onSave={(data) => handleSaveCompletion(task.id, data)}
+                            onCancel={() => setEditingTaskId(null)}
+                            canEdit={canEdit}
+                        />
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="flex-grow space-y-6 pb-12 overflow-hidden">
             {/* 1. COLLAPSIBLE OBJECTIVES SECTION */}
@@ -972,69 +1067,36 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
             >
                 <summary className="p-5 font-bold text-slate-800 text-xl cursor-pointer flex items-center justify-between list-none">
                     <div className="flex items-center gap-2">
-                         Assigned Tasks ({activeManagerTasksCount})
+                         Assigned Tasks ({activeManagerTasks.length})
                     </div>
                     <ChevronDownIcon className={`transition-transform transform ${isManagerTasksOpen ? 'rotate-180' : ''}`} />
                 </summary>
                 <div className="p-5 pt-0 overflow-hidden">
                     <div className="space-y-4 overflow-hidden">
-                        {managerTasks.map(task => {
-                            const completion = taskCompletions.find(tc => tc.taskId === task.id && (isCsmView ? tc.csmId === entityId : tc.customerId === entity.id));
-                            const isEditing = editingTaskId === task.id;
-                            const isComplete = completion?.isCompleted || false;
+                        {activeManagerTasks.map(task => renderTaskCard(task))}
+                        
+                        {activeManagerTasks.length === 0 && (
+                            <div className="text-center py-8 bg-slate-50/50 rounded-lg border border-dashed border-slate-300">
+                                <p className="text-slate-400 italic">No incomplete tasks assigned.</p>
+                            </div>
+                        )}
 
-                            return (
-                                <div key={task.id} className={`p-4 rounded-md border overflow-hidden transition-all duration-200 ${isComplete ? 'bg-green-50/50 border-green-200 shadow-sm' : 'bg-white border-slate-200 shadow-sm'}`}>
-                                    <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-                                        <div className="flex items-start flex-grow min-w-0 w-full">
-                                            {isComplete ? <CheckCircleIcon className="h-6 w-6 text-green-500 mr-3 mt-0.5 flex-shrink-0" /> : <div className="h-6 w-6 border-2 border-slate-300 rounded-full mr-3 mt-0.5 flex-shrink-0 bg-white"></div>}
-                                            <div className="flex-grow min-w-0">
-                                                <p className="font-bold text-slate-800 text-lg break-words leading-tight mb-2">{task.title}</p>
-                                                
-                                                <div className="mt-1 mb-3">
-                                                    <MarkdownRenderer content={task.description} className="text-slate-600 text-sm leading-relaxed" />
-                                                </div>
-
-                                                <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
-                                                    <span className={`px-2 py-0.5 rounded ${new Date(task.dueDate) < new Date() && !isComplete ? 'text-red-600 bg-red-50' : 'text-slate-500 bg-slate-100'}`}>
-                                                        Due: {formatDate(task.dueDate)}
-                                                    </span>
-                                                    {isComplete && <span className="text-green-600 font-bold uppercase tracking-wider text-[10px]">Complete</span>}
-                                                </div>
-
-                                                {isComplete && completion && (
-                                                    <div className="mt-4 p-3 bg-white/60 rounded border border-green-100 text-xs text-slate-600 italic space-y-2 overflow-hidden">
-                                                        {task.csmInputTypes.includes(CSMInputType.TextArea) && completion.notes && <p className="break-words"><strong>Note:</strong> "{completion.notes}"</p>}
-                                                        {task.csmInputTypes.includes(CSMInputType.MultiSelect) && completion.selectedOptions &&
-                                                            <p><strong>Response:</strong> <span className="font-bold not-italic text-slate-800">{completion.selectedOptions?.map(optId => task.multiSelectOptions?.find(o => o.id === optId)?.label).join(', ')}</span></p>
-                                                        }
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {!isEditing && canEdit && (
-                                            <Button variant={isComplete ? "secondary" : "primary"} onClick={() => setEditingTaskId(task.id)} className="w-full sm:w-auto flex-shrink-0 shadow-none">
-                                                {isComplete ? 'Update' : 'Complete Task'}
-                                            </Button>
-                                        )}
+                        {completedManagerTasks.length > 0 && (
+                            <div className="mt-6 pt-4 border-t border-slate-100">
+                                <button 
+                                    onClick={() => setShowCompletedManagerTasks(!showCompletedManagerTasks)}
+                                    className="flex items-center gap-2 text-[10px] font-bold text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
+                                >
+                                    <ChevronDownIcon className={`w-3 h-3 transform transition-transform ${showCompletedManagerTasks ? 'rotate-180' : ''}`} />
+                                    Archived Tasks ({completedManagerTasks.length})
+                                </button>
+                                {showCompletedManagerTasks && (
+                                    <div className="mt-3 space-y-4 animate-fadeIn">
+                                        {completedManagerTasks.map(task => renderTaskCard(task))}
                                     </div>
-                                    {isEditing && canEdit && (
-                                        <div className="mt-6 border-t border-slate-100 pt-4">
-                                            <TaskCompletionForm 
-                                                task={task} 
-                                                customerId={isCsmView ? undefined : entityId}
-                                                csmId={isCsmView ? entityId : undefined}
-                                                existingCompletion={completion} 
-                                                onSave={(data) => handleSaveCompletion(task.id, data)}
-                                                onCancel={() => setEditingTaskId(null)}
-                                                canEdit={canEdit}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                        {managerTasks.length === 0 && <p className="text-slate-400 text-center py-8 italic bg-slate-50/50 rounded-lg">No manager tasks assigned.</p>}
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </details>

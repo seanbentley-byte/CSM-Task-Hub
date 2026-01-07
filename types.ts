@@ -7,6 +7,12 @@ export enum TaskCategory {
     Other = 'Other',
 }
 
+export enum TaskUrgency {
+    High = 'High',
+    Medium = 'Medium',
+    Low = 'Low',
+}
+
 export enum CSMInputType {
     Checkbox = 'Checkbox',
     TextArea = 'Text Area',
@@ -39,6 +45,7 @@ export interface Task {
     description: string;
     dueDate: string;
     category: TaskCategory;
+    urgency: TaskUrgency;
     csmInputTypes: CSMInputType[];
     assignmentType: 'customer' | 'csm';
     assignedCustomerIds: string[];

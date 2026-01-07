@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Task, CSMInputType, TaskCategory, MultiSelectOption, Customer, User } from '../types';
+import { Task, CSMInputType, TaskCategory, TaskUrgency, MultiSelectOption, Customer, User } from '../types';
 import { useAppContext } from './AppContext';
 import { Card, Button, Modal, Tag, PlusIcon, ArchiveIcon, ChevronDownIcon, CheckCircleIcon, UsersIcon, PencilIcon, SearchIcon, TrashIcon, DownloadIcon, MarkdownRenderer, SparklesIcon } from './ui';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -28,6 +28,7 @@ interface AIGeneratedTaskData {
     description: string;
     category: TaskCategory;
     csmInputTypes: CSMInputType[];
+    urgency?: TaskUrgency;
 }
 
 const AITaskModal: React.FC<{ 
@@ -48,7 +49,7 @@ const AITaskModal: React.FC<{
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-pro-preview',
-                contents: `Parse the following request and generate a task object based on the provided schema. The request is: "${prompt}". The description should be suitable for a customer success manager and support markdown formatting.`,
+                contents: `Parse the following request and generate a task object based on the provided schema. The request is: "${prompt}". The description should be suitable for a customer success manager and support markdown formatting. Determine an appropriate urgency (High, Medium, Low) based on the context.`,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -57,12 +58,13 @@ const AITaskModal: React.FC<{
                             title: { type: Type.STRING },
                             description: { type: Type.STRING },
                             category: { type: Type.STRING, enum: Object.values(TaskCategory) },
+                            urgency: { type: Type.STRING, enum: Object.values(TaskUrgency) },
                             csmInputTypes: {
                                 type: Type.ARRAY,
                                 items: { type: Type.STRING, enum: Object.values(CSMInputType) }
                             },
                         },
-                        required: ['title', 'description', 'category', 'csmInputTypes']
+                        required: ['title', 'description', 'category', 'csmInputTypes', 'urgency']
                     },
                 },
             });
@@ -117,6 +119,7 @@ const TaskFormModal: React.FC<{
     const [description, setDescription] = useState('');
     const [dueDate, setDueDate] = useState('');
     const [category, setCategory] = useState<TaskCategory>(TaskCategory.Other);
+    const [urgency, setUrgency] = useState<TaskUrgency>(TaskUrgency.Medium);
     const [csmInputTypes, setCsmInputTypes] = useState<CSMInputType[]>([]);
     const [multiSelectOptionsStr, setMultiSelectOptionsStr] = useState('');
     
@@ -139,16 +142,17 @@ const TaskFormModal: React.FC<{
             setDueDate(rawDueDate.includes('T') ? rawDueDate.split('T')[0] : rawDueDate);
 
             setCategory(data?.category || TaskCategory.Other);
+            setUrgency(data?.urgency || editingTask?.urgency || TaskUrgency.Medium);
             setCsmInputTypes(data?.csmInputTypes || [CSMInputType.Checkbox]);
             setMultiSelectOptionsStr(editingTask?.multiSelectOptions?.map(o => o.label).join(', ') || '');
             
             setAssignmentType(editingTask?.assignmentType || 'customer');
             
             setSelectedCustomerIds(editingTask?.assignedCustomerIds || []);
-            setAssignToAll(editingTask?.assignedCustomerIds.length === customers.length);
+            setAssignToAll(editingTask?.assignedCustomerIds.length === customers.length && customers.length > 0);
 
             setSelectedCsmIds(editingTask?.assignedCsmIds || []);
-            setAssignToAllCsms(!!editingTask?.assignedCsmIds && editingTask.assignedCsmIds.length === assignableUsers.length);
+            setAssignToAllCsms(!!editingTask?.assignedCsmIds && editingTask.assignedCsmIds.length === assignableUsers.length && assignableUsers.length > 0);
         }
     }, [editingTask, initialData, isOpen, customers, assignableUsers]);
 
@@ -168,6 +172,7 @@ const TaskFormModal: React.FC<{
             description,
             dueDate,
             category,
+            urgency,
             csmInputTypes,
             assignmentType,
             assignedCustomerIds: assignmentType === 'customer' ? (assignToAll ? customers.map(c => c.id) : selectedCustomerIds) : [],
@@ -221,9 +226,17 @@ const TaskFormModal: React.FC<{
                     <label className="block text-sm font-medium text-slate-700">Description (Markdown supported)</label>
                     <textarea value={description} onChange={e => setDescription(e.target.value)} required rows={3} className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700">Due Date</label>
-                    <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Due Date</label>
+                        <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} required className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Urgency</label>
+                        <select value={urgency} onChange={e => setUrgency(e.target.value as TaskUrgency)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                            {Object.values(TaskUrgency).map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                    </div>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-slate-700">Category</label>
@@ -591,12 +604,22 @@ const TaskRow: React.FC<{
         }
     };
 
+    const getUrgencyColor = (urgency: TaskUrgency) => {
+        switch (urgency) {
+            case TaskUrgency.High: return 'bg-red-600 text-white';
+            case TaskUrgency.Medium: return 'bg-yellow-500 text-white';
+            case TaskUrgency.Low: return 'bg-slate-400 text-white';
+            default: return 'bg-slate-400 text-white';
+        }
+    };
+
     return (
         <div className="border border-slate-200 rounded-lg p-4 bg-white shadow-sm overflow-hidden transition-all duration-300">
             <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
                 <div className="flex-grow min-w-0 w-full lg:w-auto">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                          <Tag color={getCategoryColor(task.category)}>{task.category}</Tag>
+                         <span className={`px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider ${getUrgencyColor(task.urgency)}`}>{task.urgency}</span>
                          {isEditingTitle ? (
                              <input 
                                 autoFocus
