@@ -9,7 +9,7 @@ export enum TaskCategory {
 
 export enum TaskUrgency {
     High = 'High',
-    Medium = 'Medium',
+    Normal = 'Normal',
     Low = 'Low',
 }
 

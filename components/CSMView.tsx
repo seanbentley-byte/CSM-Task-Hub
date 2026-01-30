@@ -337,6 +337,7 @@ const FeatureRequestRow: React.FC<{
     onUpdate: (id: string, updates: Partial<FeatureRequest>) => void;
     canEdit: boolean;
 }> = ({ item, onComplete, onDelete, onUpdate, canEdit }) => {
+    // fix: Correct state declaration with destructuring [isEditing, setIsEditing] = useState(false)
     const [isEditing, setIsEditing] = useState(false);
     const [text, setText] = useState(item.text);
     const [link, setLink] = useState(item.ticketLink || '');
@@ -387,7 +388,7 @@ const FeatureRequestRow: React.FC<{
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-md group hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all overflow-hidden gap-2">
              <div 
                 className={`flex-grow min-w-0 ${canEdit && !item.isCompleted ? 'cursor-pointer' : ''}`} 
-                onClick={() => canEdit && !item.isCompleted && setIsEditing(true)}
+                onClick={() => canEdit && !item.isCompleted && setIsEditing(true)} 
                 title={canEdit && !item.isCompleted ? "Click to edit" : ""}
             >
                 <p className={`text-sm break-words ${item.isCompleted ? 'line-through text-slate-500' : 'text-slate-800 group-hover:text-indigo-700 font-medium'}`}>
@@ -623,7 +624,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
     
     const urgencyMap: Record<TaskUrgency, number> = {
         [TaskUrgency.High]: 0,
-        [TaskUrgency.Medium]: 1,
+        [TaskUrgency.Normal]: 1,
         [TaskUrgency.Low]: 2,
     };
 
@@ -637,8 +638,8 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
             return t.assignmentType === 'customer' && t.assignedCustomerIds.includes(entityId)
         }).sort((a, b) => {
             // Sort by Urgency first
-            const urgencyA = urgencyMap[a.urgency || TaskUrgency.Medium];
-            const urgencyB = urgencyMap[b.urgency || TaskUrgency.Medium];
+            const urgencyA = urgencyMap[a.urgency || TaskUrgency.Normal];
+            const urgencyB = urgencyMap[b.urgency || TaskUrgency.Normal];
             if (urgencyA !== urgencyB) return urgencyA - urgencyB;
             
             // Sort by Due Date second
@@ -867,7 +868,7 @@ const Agenda: React.FC<{ entityId: string; entityType: 'customer' | 'csm'; canEd
         const getUrgencyColor = (urgency: TaskUrgency) => {
             switch (urgency) {
                 case TaskUrgency.High: return 'bg-red-600 text-white';
-                case TaskUrgency.Medium: return 'bg-yellow-500 text-white';
+                case TaskUrgency.Normal: return 'bg-yellow-500 text-white';
                 case TaskUrgency.Low: return 'bg-slate-400 text-white';
                 default: return 'bg-slate-400 text-white';
             }

@@ -49,7 +49,7 @@ const AITaskModal: React.FC<{
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-pro-preview',
-                contents: `Parse the following request and generate a task object based on the provided schema. The request is: "${prompt}". The description should be suitable for a customer success manager and support markdown formatting. Determine an appropriate urgency (High, Medium, Low) based on the context.`,
+                contents: `Parse the following request and generate a task object based on the provided schema. The request is: "${prompt}". The description should be suitable for a customer success manager and support markdown formatting. Determine an appropriate urgency (High, Normal, Low) based on the context.`,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -119,7 +119,7 @@ const TaskFormModal: React.FC<{
     const [description, setDescription] = useState('');
     const [dueDate, setDueDate] = useState('');
     const [category, setCategory] = useState<TaskCategory>(TaskCategory.Other);
-    const [urgency, setUrgency] = useState<TaskUrgency>(TaskUrgency.Medium);
+    const [urgency, setUrgency] = useState<TaskUrgency>(TaskUrgency.Normal);
     const [csmInputTypes, setCsmInputTypes] = useState<CSMInputType[]>([]);
     const [multiSelectOptionsStr, setMultiSelectOptionsStr] = useState('');
     
@@ -142,7 +142,7 @@ const TaskFormModal: React.FC<{
             setDueDate(rawDueDate.includes('T') ? rawDueDate.split('T')[0] : rawDueDate);
 
             setCategory(data?.category || TaskCategory.Other);
-            setUrgency(data?.urgency || editingTask?.urgency || TaskUrgency.Medium);
+            setUrgency(data?.urgency || editingTask?.urgency || TaskUrgency.Normal);
             setCsmInputTypes(data?.csmInputTypes || [CSMInputType.Checkbox]);
             setMultiSelectOptionsStr(editingTask?.multiSelectOptions?.map(o => o.label).join(', ') || '');
             
@@ -613,7 +613,7 @@ const TaskRow: React.FC<{
     const getUrgencyColor = (urgency: TaskUrgency) => {
         switch (urgency) {
             case TaskUrgency.High: return 'bg-red-600 text-white';
-            case TaskUrgency.Medium: return 'bg-yellow-500 text-white';
+            case TaskUrgency.Normal: return 'bg-yellow-500 text-white';
             case TaskUrgency.Low: return 'bg-slate-400 text-white';
             default: return 'bg-slate-400 text-white';
         }

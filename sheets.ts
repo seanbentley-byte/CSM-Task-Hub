@@ -80,7 +80,7 @@ export class SheetsService {
             jsonStringify(t.csmInputTypes), t.assignmentType, 
             jsonStringify(t.assignedCustomerIds), jsonStringify(t.assignedCsmIds), 
             jsonStringify(t.multiSelectOptions), t.isArchived, formatDateForSheet(t.createdAt),
-            t.urgency || 'Medium'
+            t.urgency || 'Normal'
         ]);
         return [['ID', 'Title', 'Description', 'Due Date', 'Category', 'Input Types (JSON)', 'Assignment Type', 'Customer IDs (JSON)', 'CSM IDs (JSON)', 'Options (JSON)', 'Archived', 'Created At', 'Urgency'], ...rows];
     }
@@ -91,7 +91,7 @@ export class SheetsService {
             csmInputTypes: jsonParse(r[5]) || [], assignmentType: r[6],
             assignedCustomerIds: jsonParse(r[7]) || [], assignedCsmIds: jsonParse(r[8]),
             multiSelectOptions: jsonParse(r[9]), isArchived: r[10] === 'TRUE' || r[10] === true, createdAt: parseDateFromSheet(r[11]) || 0,
-            urgency: r[12] || 'Medium'
+            urgency: r[12] || 'Normal'
         }));
     }
 
